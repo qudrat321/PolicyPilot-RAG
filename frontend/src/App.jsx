@@ -898,20 +898,16 @@ export default function App() {
             </div>
           ))}
 
-          {/* Loading Indicator Turn */}
+          {/* Loading Indicator Turn - Minimalist Claude-style animated loader */}
           {loading && (
-            <div className="max-w-3xl mx-auto flex items-start gap-3.5 pr-4 animate-fade-in">
-              <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0 mt-1">
+            <div className="max-w-3xl mx-auto flex items-center gap-3 pr-4 animate-fade-in py-1">
+              <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
                 <Compass className="w-4 h-4 animate-spin" />
               </div>
-              <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-4 text-xs text-slate-400 space-y-2 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                  <span className="text-slate-300 font-medium">Searching Qdrant vectors &amp; generating answer...</span>
-                </div>
-                <p className="text-[11px] text-slate-500 font-mono">
-                  Grounding response strictly in verified document passages
-                </p>
+              <div className="flex items-center gap-1.5 px-3 py-2 bg-slate-900/50 rounded-xl border border-slate-800/60">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-bounce [animation-delay:-0.3s]" />
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-bounce [animation-delay:-0.15s]" />
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-bounce" />
               </div>
             </div>
           )}

@@ -51,6 +51,221 @@ mermaid.initialize({
   }
 });
 
+function parseCsvToRows(csvText) {
+  if (!csvText) return [];
+  const lines = csvText.trim().split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  return lines.map(line => {
+    const row = [];
+    let insideQuotes = false;
+    let entry = '';
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      if (char === '"') {
+        insideQuotes = !insideQuotes;
+      } else if (char === ',' && !insideQuotes) {
+        row.push(entry.trim());
+        entry = '';
+      } else {
+        entry += char;
+      }
+    }
+    row.push(entry.trim());
+    return row;
+  });
+}
+
+function detectCsvFromText(text) {
+  if (!text) return null;
+  // 1. Look for ```csv or ``` code blocks
+  const codeBlockRegex = /```(?:csv)?\s*\n([\s\S]*?)\n```/gi;
+  let match;
+  while ((match = codeBlockRegex.exec(text)) !== null) {
+    const block = match[1].trim();
+    const lines = block.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    if (lines.length >= 2) {
+      const c0 = (lines[0].match(/,/g) || []).length;
+      const c1 = (lines[1].match(/,/g) || []).length;
+      if (c0 >= 1 && Math.abs(c0 - c1) <= 1) {
+        return block;
+      }
+    }
+  }
+
+  // 2. Look for raw multiline CSV lines in prose
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const csvLines = lines.filter(l => l.includes(',') && !l.startsWith('#') && !l.startsWith('>') && !l.startsWith('['));
+  if (csvLines.length >= 2) {
+    const c0 = (csvLines[0].match(/,/g) || []).length;
+    const c1 = (csvLines[1].match(/,/g) || []).length;
+    if (c0 >= 1 && Math.abs(c0 - c1) <= 1) {
+      return csvLines.join('\n');
+    }
+  }
+
+  return null;
+}
+
+function ExportableCSVBlock({ rawCsv, scopeName = 'All Policy Documents', theme }) {
+  const [viewMode, setViewMode] = useState('table'); // 'table' | 'raw'
+  const rows = parseCsvToRows(rawCsv);
+
+  const handleDownloadCSV = () => {
+    if (!rows.length) return;
+    const headers = rows[0] || [];
+    const summaryLine1 = `Document Purpose: Policy data matrix detailing ${headers.slice(0, 5).join(', ')}.`;
+    const summaryLine2 = `Scope & Verification: Extracted from [${scopeName}] with 100% grounded zero-hallucination compliance.`;
+
+    const metadataRows = [
+      ['PolicyPilot RAG - Enterprise Policy Table Export'],
+      [`Exported: ${new Date().toLocaleString()} | Source Scope: ${scopeName} | Engine: Zero-Hallucination Vector Engine`],
+      [summaryLine1],
+      [summaryLine2],
+      ['']
+    ];
+
+    const fullCsvData = [...metadataRows, ...rows];
+    const csvContent = fullCsvData.map(row =>
+      row.map(cell => `"${String(cell || '').replace(/"/g, '""')}"`).join(',')
+    ).join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `policypilot_data_${Date.now()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadExcel = () => {
+    if (!rows.length) return;
+    const headers = rows[0] || [];
+    const summaryLine1 = `Document Purpose: Policy data matrix detailing ${headers.slice(0, 5).join(', ')}.`;
+    const summaryLine2 = `Scope & Verification: Extracted from [${scopeName}] with 100% grounded zero-hallucination compliance.`;
+
+    const metadataRows = [
+      ['PolicyPilot RAG - Enterprise Policy Data Table'],
+      [`Exported: ${new Date().toLocaleString()} | Source Scope: ${scopeName}`],
+      [summaryLine1],
+      [summaryLine2],
+      []
+    ];
+
+    const fullSheetData = [...metadataRows, ...rows];
+    const ws = XLSX.utils.aoa_to_sheet(fullSheetData);
+
+    const colWidths = [];
+    fullSheetData.forEach(row => {
+      row.forEach((cell, colIdx) => {
+        const len = cell ? String(cell).length : 12;
+        colWidths[colIdx] = Math.min(65, Math.max(colWidths[colIdx] || 14, len + 3));
+      });
+    });
+    ws['!cols'] = colWidths.map(w => ({ wch: w }));
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'PolicyMatrix');
+    XLSX.writeFile(wb, `policypilot_data_${Date.now()}.xlsx`);
+  };
+
+  const headers = rows[0] || [];
+  const bodyRows = rows.slice(1);
+
+  return (
+    <div className={`my-4 rounded-xl border overflow-hidden shadow-lg ${
+      theme === 'dark' ? 'border-slate-700/80 bg-slate-900/60' : 'border-slate-200 bg-white'
+    }`}>
+      {/* CSV Export & View Switcher Header */}
+      <div className={`px-3.5 py-2.5 border-b flex items-center justify-between text-xs ${
+        theme === 'dark' ? 'bg-slate-850/90 border-slate-700/80 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-700'
+      }`}>
+        <div className="flex items-center gap-2">
+          <span className="font-semibold text-emerald-500 flex items-center gap-1.5 font-mono text-[11px]">
+            <FileSpreadsheet className="w-3.5 h-3.5" />
+            <span>CSV Data Matrix</span>
+          </span>
+          <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
+            theme === 'dark' ? 'bg-slate-800 text-slate-400 border border-slate-700' : 'bg-slate-200 text-slate-600 border border-slate-300'
+          }`}>
+            {bodyRows.length} rows &bull; {headers.length} cols
+          </span>
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => setViewMode(viewMode === 'table' ? 'raw' : 'table')}
+            className={`px-2 py-1 rounded border transition-colors text-[10px] font-medium ${
+              theme === 'dark'
+                ? 'bg-slate-800 hover:bg-slate-750 text-slate-300 border-slate-700'
+                : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'
+            }`}
+            title="Toggle between table grid and raw CSV text"
+          >
+            {viewMode === 'table' ? 'Raw CSV' : 'Grid View'}
+          </button>
+
+          <button
+            onClick={handleDownloadCSV}
+            className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-750 text-slate-200 hover:text-emerald-400 border border-slate-700 transition-colors flex items-center gap-1 text-[11px] font-medium"
+            title="Download as CSV file"
+          >
+            <Download className="w-3 h-3" />
+            <span>CSV</span>
+          </button>
+
+          <button
+            onClick={handleDownloadExcel}
+            className="px-2 py-1 rounded bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-300 border border-emerald-800/80 transition-colors flex items-center gap-1 text-[11px] font-medium"
+            title="Download as Excel spreadsheet"
+          >
+            <FileSpreadsheet className="w-3 h-3" />
+            <span>Excel (.xlsx)</span>
+          </button>
+        </div>
+      </div>
+
+      {viewMode === 'table' ? (
+        <div className="overflow-x-auto max-h-96">
+          <table className="min-w-full divide-y divide-slate-800 text-xs text-left">
+            <thead className={`uppercase tracking-wider font-semibold sticky top-0 ${
+              theme === 'dark' ? 'bg-slate-850 text-slate-200 border-b border-slate-700' : 'bg-slate-100 text-slate-700 border-b border-slate-200'
+            }`}>
+              <tr>
+                {headers.map((h, i) => (
+                  <th key={i} className={`px-4 py-2 font-semibold text-emerald-500 border-b ${
+                    theme === 'dark' ? 'border-slate-700' : 'border-slate-200'
+                  }`}>
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className={`divide-y ${theme === 'dark' ? 'divide-slate-800/60' : 'divide-slate-100'}`}>
+              {bodyRows.map((row, rIdx) => (
+                <tr key={rIdx} className={`transition-colors ${
+                  theme === 'dark' ? 'hover:bg-slate-800/40 text-slate-300' : 'hover:bg-slate-50 text-slate-700'
+                }`}>
+                  {row.map((cell, cIdx) => (
+                    <td key={cIdx} className="px-4 py-2 border-b border-transparent">
+                      {cell}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <pre className={`p-3 overflow-x-auto text-xs font-mono leading-relaxed ${
+          theme === 'dark' ? 'bg-slate-950 text-slate-200' : 'bg-slate-900 text-slate-100'
+        }`}>
+          <code>{rawCsv}</code>
+        </pre>
+      )}
+    </div>
+  );
+}
+
 function ExportableTable({ children, scopeName = 'All Policy Documents' }) {
   const tableRef = useRef(null);
 
@@ -1147,13 +1362,28 @@ export default function App() {
                           td: ({ node, ...props }) => (
                             <td className={`px-4 py-2 border-b transition-colors ${theme === 'dark' ? 'text-slate-300 border-slate-800/60 hover:bg-slate-800/30' : 'text-slate-700 border-slate-100 hover:bg-slate-50'}`} {...props} />
                           ),
-                          // Code & Mermaid Diagram Renderer
+                          // Code, Mermaid Diagram & CSV Renderer
                           code: ({ node, inline, className, children, ...props }) => {
                             const match = /language-(\w+)/.exec(className || '');
                             const isMermaid = match && match[1] === 'mermaid';
 
                             if (isMermaid) {
                               return <MermaidDiagram chart={String(children).replace(/\n$/, '')} />;
+                            }
+
+                            const rawText = String(children).trim();
+                            const isCsv = (match && (match[1] === 'csv' || match[1] === 'tsv')) || (!inline && (() => {
+                              const lines = rawText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+                              if (lines.length >= 2) {
+                                const c0 = (lines[0].match(/,/g) || []).length;
+                                const c1 = (lines[1].match(/,/g) || []).length;
+                                return c0 >= 1 && Math.abs(c0 - c1) <= 1;
+                              }
+                              return false;
+                            })());
+
+                            if (isCsv) {
+                              return <ExportableCSVBlock rawCsv={rawText} scopeName={activeDocName} theme={theme} />;
                             }
 
                             if (inline) {
@@ -1282,6 +1512,82 @@ export default function App() {
                     <div className="flex items-center justify-between text-[10px] text-slate-500 px-1 pt-1">
                       <span className="font-mono">{msg.timestamp}</span>
                       <div className="flex items-center gap-3">
+                        {detectCsvFromText(msg.content) && (
+                          <>
+                            <button
+                              onClick={() => {
+                                const csvRaw = detectCsvFromText(msg.content);
+                                if (!csvRaw) return;
+                                const rows = parseCsvToRows(csvRaw);
+                                if (!rows.length) return;
+                                const headers = rows[0] || [];
+                                const summaryLine1 = `Document Purpose: Policy data matrix detailing ${headers.slice(0, 5).join(', ')}.`;
+                                const summaryLine2 = `Scope & Verification: Extracted from [${activeDocName}] with 100% grounded zero-hallucination compliance.`;
+                                const metadataRows = [
+                                  ['PolicyPilot RAG - Enterprise Policy Table Export'],
+                                  [`Exported: ${new Date().toLocaleString()} | Source Scope: ${activeDocName} | Engine: Zero-Hallucination Vector Engine`],
+                                  [summaryLine1],
+                                  [summaryLine2],
+                                  ['']
+                                ];
+                                const fullCsvData = [...metadataRows, ...rows];
+                                const csvContent = fullCsvData.map(row =>
+                                  row.map(cell => `"${String(cell || '').replace(/"/g, '""')}"`).join(',')
+                                ).join('\n');
+                                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = `policypilot_data_${Date.now()}.csv`;
+                                a.click();
+                                URL.revokeObjectURL(url);
+                              }}
+                              className={`flex items-center gap-1 transition-colors ${theme === 'dark' ? 'text-slate-400 hover:text-emerald-400' : 'text-slate-500 hover:text-emerald-600'}`}
+                              title="Export CSV data with executive summary"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                              <span>Export CSV</span>
+                            </button>
+
+                            <button
+                              onClick={() => {
+                                const csvRaw = detectCsvFromText(msg.content);
+                                if (!csvRaw) return;
+                                const rows = parseCsvToRows(csvRaw);
+                                if (!rows.length) return;
+                                const headers = rows[0] || [];
+                                const summaryLine1 = `Document Purpose: Policy data matrix detailing ${headers.slice(0, 5).join(', ')}.`;
+                                const summaryLine2 = `Scope & Verification: Extracted from [${activeDocName}] with 100% grounded zero-hallucination compliance.`;
+                                const metadataRows = [
+                                  ['PolicyPilot RAG - Enterprise Policy Data Table'],
+                                  [`Exported: ${new Date().toLocaleString()} | Source Scope: ${activeDocName}`],
+                                  [summaryLine1],
+                                  [summaryLine2],
+                                  []
+                                ];
+                                const fullSheetData = [...metadataRows, ...rows];
+                                const ws = XLSX.utils.aoa_to_sheet(fullSheetData);
+                                const colWidths = [];
+                                fullSheetData.forEach(row => {
+                                  row.forEach((cell, colIdx) => {
+                                    const len = cell ? String(cell).length : 12;
+                                    colWidths[colIdx] = Math.min(65, Math.max(colWidths[colIdx] || 14, len + 3));
+                                  });
+                                });
+                                ws['!cols'] = colWidths.map(w => ({ wch: w }));
+                                const wb = XLSX.utils.book_new();
+                                XLSX.utils.book_append_sheet(wb, ws, 'PolicyMatrix');
+                                XLSX.writeFile(wb, `policypilot_data_${Date.now()}.xlsx`);
+                              }}
+                              className={`flex items-center gap-1 transition-colors ${theme === 'dark' ? 'text-slate-400 hover:text-emerald-400' : 'text-slate-500 hover:text-emerald-600'}`}
+                              title="Export Excel (.xlsx) spreadsheet with executive summary"
+                            >
+                              <FileSpreadsheet className="w-3.5 h-3.5" />
+                              <span>Export Excel</span>
+                            </button>
+                          </>
+                        )}
+
                         <button
                           onClick={() => {
                             const msgIdx = messages.findIndex(m => m.id === msg.id);

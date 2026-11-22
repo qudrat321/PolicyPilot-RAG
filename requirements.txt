@@ -1,0 +1,28 @@
+# FastAPI & Web Server
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+pydantic>=2.9.0
+pydantic-settings>=2.6.0
+python-multipart>=0.0.12
+slowapi>=0.1.9
+
+# Google GenAI (Gemini LLM & text-embedding-004) - Zero PyTorch dependency!
+google-genai>=0.1.1
+
+# Vector Database (Qdrant Cloud)
+qdrant-client>=1.12.0
+
+# Document & Spreadsheet Extractors
+pymupdf>=1.24.11
+python-docx>=1.1.2
+python-pptx>=1.0.2
+openpyxl>=3.1.5
+beautifulsoup4>=4.12.3
+
+# Utilities & Resilience
+tenacity>=9.0.0
+httpx>=0.27.2
+
+# Testing & Quality Assurance
+pytest>=8.3.3
+pytest-asyncio>=0.24.0

@@ -1,0 +1,10 @@
+City_Category,Destination,Max_Lodging_Per_Night_USD,Daily_Meal_Per_Diem_USD,Incidentals_USD
+Tier 1,New York City NY,320,75,15
+Tier 1,San Francisco CA,310,75,15
+Tier 1,Washington DC,280,70,12
+Tier 2,Chicago IL,240,65,10
+Tier 2,Boston MA,250,65,10
+Tier 2,Austin TX,210,60,10
+Tier 3,Atlanta GA,185,55,8
+Tier 3,Dallas TX,180,55,8
+Tier 3,Standard Conus (All Other Cities),160,50,5

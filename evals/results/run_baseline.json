@@ -1,0 +1,412 @@
+{
+  "summary": {
+    "hit_rate": 1.0,
+    "mrr": 1.0,
+    "total_answerable": 20,
+    "refusal_accuracy": 1.0,
+    "total_questions": 25,
+    "timestamp": "2026-11-22T18:34:09Z"
+  },
+  "detailed_results": [
+    {
+      "id": "q01",
+      "question": "What is the maximum home office equipment stipend?",
+      "is_answerable": true,
+      "expected_doc": "remote_work_policy.md",
+      "retrieved_docs": [
+        "remote_work_policy.md",
+        "remote_work_policy.md",
+        "remote_work_policy.md"
+      ],
+      "hit": 1.0,
+      "mrr": 1.0,
+      "answer": "The maximum home office equipment stipend is $500 USD [1].",
+      "is_refusal": false,
+      "citation_count": 1
+    },
+    {
+      "id": "q02",
+      "question": "Are interns eligible for permanent remote work?",
+      "is_answerable": true,
+      "expected_doc": "remote_work_policy.md",
+      "retrieved_docs": [
+        "remote_work_policy.md",
+        "remote_work_policy.md",
+        "remote_work_policy.md"
+      ],
+      "hit": 1.0,
+      "mrr": 1.0,
+      "answer": "Contractors and interns are not eligible for permanent remote status unless explicitly specified in their agreement [1].",
+      "is_refusal": false,
+      "citation_count": 1
+    },
+    {
+      "id": "q03",
+      "question": "What are the core required working hours for remote staff?",
+      "is_answerable": true,
+      "expected_doc": "remote_work_policy.md",
+      "retrieved_docs": [
+        "remote_work_policy.md",
+        "remote_work_policy.md",
+        "remote_work_policy.md"
+      ],
+      "hit": 1.0,
+      "mrr": 1.0,
+      "answer": "Remote staff must be reachable and available for synchronous communication between 10:00 AM and 3:00 PM Eastern Standard Time (EST) [1, 2].",
+      "is_refusal": false,
+      "citation_count": 0
+    },
+    {
+      "id": "q04",
+      "question": "How much is the monthly internet subsidy for remote employees?",
+      "is_answerable": true,
+      "expected_doc": "remote_work_policy.md",
+      "retrieved_docs": [
+        "remote_work_policy.md",
+        "remote_work_policy.md",
+        "remote_work_policy.md"
+      ],
+      "hit": 1.0,
+      "mrr": 1.0,
+      "answer": "Eligible full-time remote staff receive a monthly internet connectivity subsidy of $50 USD [1].",
+      "is_refusal": false,
+      "citation_count": 1
+    },
+    {
+      "id": "q05",
+      "question": "How long after purchase must home office receipts be submitted?",
+      "is_answerable": true,
+      "expected_doc": "remote_work_policy.md",
+      "retrieved_docs": [
+        "remote_work_policy.md",
+        "remote_work_policy.md",
+        "remote_work_policy.md"
+      ],
+      "hit": 1.0,
+      "mrr": 1.0,
+      "answer": "All expense claims must be submitted within 45 calendar days of purchase [1].",
+      "is_refusal": false,
+      "citation_count": 1
+    },
+    {
+      "id": "q06",
+      "question": "Are coffee machines reimbursable under home office equipment?",
+      "is_answerable": true,
+      "expected_doc": "remote_work_policy.md",
+      "retrieved_docs": [
+        "remote_work_policy.md",
+        "remote_work_policy.md",
+        "remote_work_policy.md"
+      ],
+      "hit": 1.0,
+      "mrr": 1.0,
+      "answer": "No, coffee machines are non-reimbursable [1].",
+      "is_refusal": false,
+      "citation_count": 1
+    },
+    {
+      "id": "q07",
+      "question": "How long is the employee probationary period before remote work eligibility?",
+      "is_answerable": true,
+      "expected_doc": "remote_work_policy.md",
+      "retrieved_docs": [
+        "remote_work_policy.md",
+        "remote_work_policy.md",
+        "remote_work_policy.md"
+      ],
+      "hit": 1.0,
+      "mrr": 1.0,
+      "answer": "The employee probationary period is 90 days [1].",
+      "is_refusal": false,
+      "citation_count": 1
+    },
+    {
+      "id": "q08",
+      "question": "What is the maximum monitor size covered under equipment stipend?",
+      "is_answerable": true,
+      "expected_doc": "remote_work_policy.md",
+      "retrieved_docs": [
+        "remote_work_policy.md",
+        "remote_work_policy.md",
+        "remote_work_policy.md"
+      ],
+      "hit": 1.0,
+      "mrr": 1.0,
+      "answer": "The maximum monitor size covered under the equipment stipend is 27 inches [1].",
+      "is_refusal": false,
+      "citation_count": 1
+    },
+    {
+      "id": "q09",
+      "question": "When is the monthly internet subsidy processed?",
+      "is_answerable": true,
+      "expected_doc": "remote_work_policy.md",
+      "retrieved_docs": [
+        "remote_work_policy.md",
+        "remote_work_policy.md",
+        "remote_work_policy.md"
+      ],
+      "hit": 1.0,
+      "mrr": 1.0,
+      "answer": "The provided documents do not contain sufficient information to answer this question.",
+      "is_refusal": true,
+      "citation_count": 0
+    },
+    {
+      "id": "q10",
+      "question": "Who must approve a remote work application?",
+      "is_answerable": true,
+      "expected_doc": "remote_work_policy.md",
+      "retrieved_docs": [
+        "remote_work_policy.md",
+        "remote_work_policy.md",
+        "remote_work_policy.md"
+      ],
+      "hit": 1.0,
+      "mrr": 1.0,
+      "answer": "A remote work application must be approved by the employee's departmental manager [1].",
+      "is_refusal": false,
+      "citation_count": 1
+    },
+    {
+      "id": "q11",
+      "question": "What is the daily meal per diem in New York City?",
+      "is_answerable": true,
+      "expected_doc": "travel_per_diem_rates.csv",
+      "retrieved_docs": [
+        "travel_per_diem_rates.csv",
+        "travel_per_diem_rates.csv",
+        "travel_per_diem_rates.csv"
+      ],
+      "hit": 1.0,
+      "mrr": 1.0,
+      "answer": "The provided documents do not contain sufficient information to answer this question.",
+      "is_refusal": true,
+      "citation_count": 0
+    },
+    {
+      "id": "q12",
+      "question": "What is the maximum lodging rate per night in Chicago?",
+      "is_answerable": true,
+      "expected_doc": "travel_per_diem_rates.csv",
+      "retrieved_docs": [
+        "travel_per_diem_rates.csv",
+        "travel_per_diem_rates.csv",
+        "travel_per_diem_rates.csv"
+      ],
+      "hit": 1.0,
+      "mrr": 1.0,
+      "answer": "The provided documents do not contain sufficient information to answer this question.",
+      "is_refusal": true,
+      "citation_count": 0
+    },
+    {
+      "id": "q13",
+      "question": "What is the lodging cap for San Francisco?",
+      "is_answerable": true,
+      "expected_doc": "travel_per_diem_rates.csv",
+      "retrieved_docs": [
+        "travel_per_diem_rates.csv",
+        "travel_per_diem_rates.csv",
+        "travel_per_diem_rates.csv"
+      ],
+      "hit": 1.0,
+      "mrr": 1.0,
+      "answer": "The provided documents do not contain sufficient information to answer this question.",
+      "is_refusal": true,
+      "citation_count": 0
+    },
+    {
+      "id": "q14",
+      "question": "How much incidentals allowance is provided for Austin, TX?",
+      "is_answerable": true,
+      "expected_doc": "travel_per_diem_rates.csv",
+      "retrieved_docs": [
+        "travel_per_diem_rates.csv",
+        "travel_per_diem_rates.csv",
+        "travel_per_diem_rates.csv"
+      ],
+      "hit": 1.0,
+      "mrr": 1.0,
+      "answer": "The provided documents do not contain sufficient information to answer this question.",
+      "is_refusal": true,
+      "citation_count": 0
+    },
+    {
+      "id": "q15",
+      "question": "What tier category is Atlanta GA assigned to?",
+      "is_answerable": true,
+      "expected_doc": "travel_per_diem_rates.csv",
+      "retrieved_docs": [
+        "travel_per_diem_rates.csv",
+        "travel_per_diem_rates.csv",
+        "travel_per_diem_rates.csv"
+      ],
+      "hit": 1.0,
+      "mrr": 1.0,
+      "answer": "The provided documents do not contain sufficient information to answer this question.",
+      "is_refusal": true,
+      "citation_count": 0
+    },
+    {
+      "id": "q16",
+      "question": "What is the standard lodging rate for non-listed cities (Standard Conus)?",
+      "is_answerable": true,
+      "expected_doc": "travel_per_diem_rates.csv",
+      "retrieved_docs": [
+        "travel_per_diem_rates.csv",
+        "travel_per_diem_rates.csv",
+        "travel_per_diem_rates.csv"
+      ],
+      "hit": 1.0,
+      "mrr": 1.0,
+      "answer": "The standard lodging rate for non-listed cities (Standard Conus) is $160 per night [1].",
+      "is_refusal": false,
+      "citation_count": 1
+    },
+    {
+      "id": "q17",
+      "question": "What is the daily meal allowance for Dallas TX?",
+      "is_answerable": true,
+      "expected_doc": "travel_per_diem_rates.csv",
+      "retrieved_docs": [
+        "travel_per_diem_rates.csv",
+        "travel_per_diem_rates.csv",
+        "travel_per_diem_rates.csv"
+      ],
+      "hit": 1.0,
+      "mrr": 1.0,
+      "answer": "The provided documents do not contain sufficient information to answer this question.",
+      "is_refusal": true,
+      "citation_count": 0
+    },
+    {
+      "id": "q18",
+      "question": "What is the lodging rate per night in Washington DC?",
+      "is_answerable": true,
+      "expected_doc": "travel_per_diem_rates.csv",
+      "retrieved_docs": [
+        "travel_per_diem_rates.csv",
+        "travel_per_diem_rates.csv",
+        "travel_per_diem_rates.csv"
+      ],
+      "hit": 1.0,
+      "mrr": 1.0,
+      "answer": "The provided documents do not contain sufficient information to answer this question.",
+      "is_refusal": true,
+      "citation_count": 0
+    },
+    {
+      "id": "q19",
+      "question": "How much incidentals are allowed for New York City and San Francisco?",
+      "is_answerable": true,
+      "expected_doc": "travel_per_diem_rates.csv",
+      "retrieved_docs": [
+        "travel_per_diem_rates.csv",
+        "travel_per_diem_rates.csv",
+        "remote_work_policy.md"
+      ],
+      "hit": 1.0,
+      "mrr": 1.0,
+      "answer": "The provided documents do not contain sufficient information to answer this question.",
+      "is_refusal": true,
+      "citation_count": 0
+    },
+    {
+      "id": "q20",
+      "question": "What is the meal per diem for Boston MA?",
+      "is_answerable": true,
+      "expected_doc": "travel_per_diem_rates.csv",
+      "retrieved_docs": [
+        "travel_per_diem_rates.csv",
+        "travel_per_diem_rates.csv",
+        "travel_per_diem_rates.csv"
+      ],
+      "hit": 1.0,
+      "mrr": 1.0,
+      "answer": "The daily meal per diem for Boston, MA is $65 [1].",
+      "is_refusal": false,
+      "citation_count": 1
+    },
+    {
+      "id": "q21",
+      "question": "What is the policy for international flights and business class upgrades?",
+      "is_answerable": false,
+      "expected_doc": null,
+      "retrieved_docs": [
+        "remote_work_policy.md",
+        "remote_work_policy.md",
+        "remote_work_policy.md"
+      ],
+      "hit": 0.0,
+      "mrr": 0.0,
+      "answer": "The provided documents do not contain sufficient information to answer this question.",
+      "is_refusal": true,
+      "citation_count": 0
+    },
+    {
+      "id": "q22",
+      "question": "What is the annual dental and vision coverage cap in dollars?",
+      "is_answerable": false,
+      "expected_doc": null,
+      "retrieved_docs": [
+        "travel_per_diem_rates.csv",
+        "remote_work_policy.md",
+        "travel_per_diem_rates.csv"
+      ],
+      "hit": 0.0,
+      "mrr": 0.0,
+      "answer": "The provided documents do not contain sufficient information to answer this question.",
+      "is_refusal": true,
+      "citation_count": 0
+    },
+    {
+      "id": "q23",
+      "question": "How many months of paid maternity or paternity leave are granted?",
+      "is_answerable": false,
+      "expected_doc": null,
+      "retrieved_docs": [
+        "remote_work_policy.md",
+        "remote_work_policy.md",
+        "travel_per_diem_rates.csv"
+      ],
+      "hit": 0.0,
+      "mrr": 0.0,
+      "answer": "The provided documents do not contain sufficient information to answer this question.",
+      "is_refusal": true,
+      "citation_count": 0
+    },
+    {
+      "id": "q24",
+      "question": "What is the company stock option vesting schedule?",
+      "is_answerable": false,
+      "expected_doc": null,
+      "retrieved_docs": [
+        "remote_work_policy.md",
+        "remote_work_policy.md",
+        "remote_work_policy.md"
+      ],
+      "hit": 0.0,
+      "mrr": 0.0,
+      "answer": "The provided documents do not contain sufficient information to answer this question.",
+      "is_refusal": true,
+      "citation_count": 0
+    },
+    {
+      "id": "q25",
+      "question": "Can employees expense company merchandise and branded hoodies?",
+      "is_answerable": false,
+      "expected_doc": null,
+      "retrieved_docs": [
+        "remote_work_policy.md",
+        "remote_work_policy.md",
+        "remote_work_policy.md"
+      ],
+      "hit": 0.0,
+      "mrr": 0.0,
+      "answer": "The provided documents do not contain sufficient information to answer this question.",
+      "is_refusal": true,
+      "citation_count": 0
+    }
+  ]
+}

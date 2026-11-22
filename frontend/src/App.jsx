@@ -3,8 +3,6 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import mermaid from 'mermaid';
 import { jsPDF } from 'jspdf';
-import ExcelJS from 'exceljs';
-import * as XLSX from 'xlsx';
 import {
   Compass,
   Send,
@@ -27,7 +25,6 @@ import {
   Pencil,
   RotateCcw,
   X,
-  Download,
   FileSpreadsheet,
   FileDown,
   Table,
@@ -186,385 +183,6 @@ function cleanMarkdownArtifacts(str) {
     return '';
   }
   return s;
-}
-
-function exportDataAsCsv(rows, defaultFilename = 'policypilot_data', scopeName = 'All Policy Documents', question = 'Policy Inquiry', citations = []) {
-  if (!rows || !rows.length) return;
-  const cleanRows = rows
-    .map(r => r.map(c => cleanMarkdownArtifacts(c)))
-    .filter(r => r.some(c => c && c.length > 0));
-  if (!cleanRows.length) return;
-
-  const now = new Date();
-  const dateStr = now.toLocaleDateString('en-GB'); // DD/MM/YYYY
-  const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  const cleanQ = cleanMarkdownArtifacts(question || 'Policy Inquiry').replace(/[\r\n]+/g, ' ').replace(/"/g, '""');
-
-  const metaHeader = [
-    '# ==============================================================================',
-    '# PolicyPilot RAG | Enterprise Policy Compliance & Grounded Intelligence Report',
-    '# Verification Status: 100% GROUNDED | Zero-Hallucination Vector Architecture',
-    `# Generated Date: ${dateStr} ${timeStr}`,
-    `# Policy Inquiry: "${cleanQ}"`,
-    `# Scope: Validated strictly against repository [${scopeName}]`,
-    '# =============================================================================='
-  ].join('\r\n');
-
-  const csvRows = cleanRows.map(row =>
-    row.map(cell => {
-      const str = String(cell ?? '').trim();
-      if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
-        return `"${str.replace(/"/g, '""')}"`;
-      }
-      return str;
-    }).join(',')
-  ).join('\r\n');
-
-  let fullCsv = `${metaHeader}\r\n${csvRows}`;
-
-  if (citations && citations.length > 0) {
-    const citationLines = [
-      '',
-      '# ==============================================================================',
-      '# AUDIT TRAIL: VERIFIED SOURCE CITATIONS',
-      '# ==============================================================================',
-      'Citation ID,Document Name,Page Reference,Extracted Passage'
-    ];
-    citations.forEach((c, idx) => {
-      const cid = typeof c === 'object' && c.citation_id ? c.citation_id : `[${idx + 1}]`;
-      const fn = typeof c === 'object' ? (c.filename || 'Document') : c;
-      const pg = typeof c === 'object' ? (c.page_or_section || 'N/A') : 'N/A';
-      const snip = typeof c === 'object' ? cleanMarkdownArtifacts(c.snippet || '') : '';
-      citationLines.push(`"${cid}","${fn.replace(/"/g, '""')}","${pg.replace(/"/g, '""')}","${snip.replace(/"/g, '""')}"`);
-    });
-    fullCsv += `\r\n${citationLines.join('\r\n')}`;
-  }
-
-  const blob = new Blob(['\uFEFF' + fullCsv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${defaultFilename}_${Date.now()}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-async function exportDataAsExcel(
-  rows,
-  scopeName = 'All Policy Documents',
-  sheetName = 'PolicyMatrix',
-  defaultFilename = 'policypilot_data',
-  question = 'Policy Inquiry',
-  citations = []
-) {
-  if (!rows || !rows.length) return;
-  const cleanRows = rows
-    .map(r => r.map(c => cleanMarkdownArtifacts(c)))
-    .filter(r => r.some(c => c && c.length > 0));
-  if (!cleanRows.length) return;
-
-  const headers = cleanRows[0] || [];
-  const bodyRows = cleanRows.slice(1);
-  const colCount = Math.max(headers.length, 3);
-
-  const now = new Date();
-  const dateStr = now.toLocaleDateString('en-GB'); // DD/MM/YYYY
-  const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  const cleanQ = cleanMarkdownArtifacts(question || 'Policy Inquiry').replace(/[\r\n]+/g, ' ');
-
-  const wb = new ExcelJS.Workbook();
-  wb.creator = 'PolicyPilot RAG';
-  wb.created = now;
-
-  // -------------------------------------------------------------
-  // TAB 1: Policy Intelligence Report
-  // -------------------------------------------------------------
-  const ws1 = wb.addWorksheet('Policy Intelligence Report', {
-    pageSetup: {
-      orientation: 'landscape',
-      paperSize: 9, // A4
-      fitToPage: true,
-      fitToWidth: 1,
-      fitToHeight: 0
-    }
-  });
-
-  // Freeze header panes on data table
-  ws1.views = [{ state: 'frozen', ySplit: 10 }];
-
-  // Left banner end & right banner start
-  const leftBannerEnd = Math.max(1, colCount - 2);
-  const rightBannerStart = leftBannerEnd + 1;
-
-  // Row 1: Brand Title & Verification Badge
-  ws1.getRow(1).height = 28;
-  if (leftBannerEnd > 1) {
-    ws1.mergeCells(1, 1, 1, leftBannerEnd);
-  }
-  const cellA1 = ws1.getCell(1, 1);
-  cellA1.value = 'PolicyPilot RAG';
-  cellA1.font = { name: 'Calibri', size: 16, bold: true, color: { argb: 'FFFFFFFF' } };
-  cellA1.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
-
-  if (colCount >= rightBannerStart) {
-    if (colCount > rightBannerStart) {
-      ws1.mergeCells(1, rightBannerStart, 1, colCount);
-    }
-    const cellStatus = ws1.getCell(1, rightBannerStart);
-    cellStatus.value = 'VERIFICATION: 100% GROUNDED';
-    cellStatus.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF10B981' } };
-    cellStatus.alignment = { horizontal: 'right', vertical: 'middle' };
-  }
-
-  for (let c = 1; c <= colCount; c++) {
-    ws1.getCell(1, c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
-  }
-
-  // Row 2: Subtitle & Timestamp
-  ws1.getRow(2).height = 20;
-  if (leftBannerEnd > 1) {
-    ws1.mergeCells(2, 1, 2, leftBannerEnd);
-  }
-  const cellSub = ws1.getCell(2, 1);
-  cellSub.value = 'Enterprise Policy Compliance & Grounded Intelligence Report';
-  cellSub.font = { name: 'Calibri', size: 9, italic: true, color: { argb: 'FF94A3B8' } };
-  cellSub.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
-
-  if (colCount >= rightBannerStart) {
-    if (colCount > rightBannerStart) {
-      ws1.mergeCells(2, rightBannerStart, 2, colCount);
-    }
-    const cellDate = ws1.getCell(2, rightBannerStart);
-    cellDate.value = `Date: ${dateStr} ${timeStr}`;
-    cellDate.font = { name: 'Calibri', size: 9, color: { argb: 'FFCBD5E1' } };
-    cellDate.alignment = { horizontal: 'right', vertical: 'middle' };
-  }
-
-  for (let c = 1; c <= colCount; c++) {
-    ws1.getCell(2, c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
-  }
-
-  // Row 3: Accent Stripe (#10B981)
-  ws1.getRow(3).height = 4;
-  for (let c = 1; c <= colCount; c++) {
-    ws1.getCell(3, c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF10B981' } };
-  }
-
-  // Row 4: Blank
-  ws1.getRow(4).height = 10;
-
-  // Rows 5-7: Executive Purpose & Scope Box
-  ws1.getRow(5).height = 24;
-  ws1.mergeCells(5, 1, 5, colCount);
-  const c5 = ws1.getCell(5, 1);
-  c5.value = 'EXECUTIVE PURPOSE & DOCUMENT SCOPE';
-  c5.font = { name: 'Calibri', size: 10.5, bold: true, color: { argb: 'FF059669' } };
-  c5.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
-
-  ws1.getRow(6).height = 24;
-  ws1.mergeCells(6, 1, 6, colCount);
-  const c6 = ws1.getCell(6, 1);
-  c6.value = `• Purpose: Provides verified, policy-grounded provisions addressing "${cleanQ}".`;
-  c6.font = { name: 'Calibri', size: 9.5, color: { argb: 'FF334155' } };
-  c6.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true, indent: 1 };
-
-  ws1.getRow(7).height = 24;
-  ws1.mergeCells(7, 1, 7, colCount);
-  const c7 = ws1.getCell(7, 1);
-  c7.value = `• Scope & Verification: Validated strictly against repository [${scopeName}] with zero-hallucination vector guarantee.`;
-  c7.font = { name: 'Calibri', size: 9.5, color: { argb: 'FF334155' } };
-  c7.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true, indent: 1 };
-
-  const borderThin = {
-    top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
-    bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
-    left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
-    right: { style: 'thin', color: { argb: 'FFCBD5E1' } }
-  };
-
-  for (let r = 5; r <= 7; r++) {
-    for (let c = 1; c <= colCount; c++) {
-      const cell = ws1.getCell(r, c);
-      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
-      cell.border = borderThin;
-    }
-  }
-
-  // Row 8: Blank
-  ws1.getRow(8).height = 10;
-
-  // Row 9: Section Title
-  ws1.getRow(9).height = 24;
-  ws1.mergeCells(9, 1, 9, colCount);
-  const c9 = ws1.getCell(9, 1);
-  c9.value = 'VERIFIED POLICY FINDINGS & DETAILS:';
-  c9.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF059669' } };
-  c9.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
-  for (let c = 1; c <= colCount; c++) {
-    ws1.getCell(9, c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
-    ws1.getCell(9, c).border = borderThin;
-  }
-
-  // Row 10: Table Headers
-  ws1.getRow(10).height = 28;
-  for (let c = 1; c <= colCount; c++) {
-    const cell = ws1.getCell(10, c);
-    cell.value = headers[c - 1] ? String(headers[c - 1]).toUpperCase() : '';
-    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
-    cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
-    cell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true, indent: 1 };
-    cell.border = {
-      top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
-      bottom: { style: 'medium', color: { argb: 'FF10B981' } },
-      left: { style: 'thin', color: { argb: 'FF334155' } },
-      right: { style: 'thin', color: { argb: 'FF334155' } }
-    };
-  }
-
-  // Row 11+: Data Rows
-  let curRow = 11;
-  const borderLight = {
-    top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-    bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-    left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-    right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
-  };
-
-  bodyRows.forEach((row, rIdx) => {
-    const isEven = rIdx % 2 === 0;
-    const fillZebra = {
-      type: 'pattern',
-      pattern: 'solid',
-      fgColor: { argb: isEven ? 'FFFFFFFF' : 'FFF8FAFC' }
-    };
-
-    let maxLineCount = 1;
-    for (let c = 1; c <= colCount; c++) {
-      const val = row[c - 1] != null ? cleanMarkdownArtifacts(String(row[c - 1])) : '';
-      const cell = ws1.getCell(curRow, c);
-      cell.value = val;
-      cell.font = { name: 'Calibri', size: 9.5, color: { argb: 'FF334155' } };
-      cell.fill = fillZebra;
-      cell.border = borderLight;
-      cell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true, indent: 1 };
-
-      const lines = Math.ceil(val.length / 45);
-      if (lines > maxLineCount) maxLineCount = lines;
-    }
-    ws1.getRow(curRow).height = Math.max(22, maxLineCount * 16 + 6);
-    curRow++;
-  });
-
-  // Footer Row
-  curRow += 1;
-  ws1.getRow(curRow).height = 20;
-  ws1.mergeCells(curRow, 1, curRow, colCount);
-  const footerCell = ws1.getCell(curRow, 1);
-  footerCell.value = 'PolicyPilot RAG | Confidential Enterprise Compliance | Zero-Hallucination Vector Architecture';
-  footerCell.font = { name: 'Calibri', size: 8, italic: true, color: { argb: 'FF94A3B8' } };
-  footerCell.alignment = { horizontal: 'center', vertical: 'middle' };
-
-  // Calculate Column Widths (cap at 55)
-  for (let c = 1; c <= colCount; c++) {
-    let maxLen = headers[c - 1] ? String(headers[c - 1]).length : 12;
-    bodyRows.forEach(row => {
-      const cellVal = row[c - 1] ? String(row[c - 1]) : '';
-      if (cellVal.length > maxLen) maxLen = cellVal.length;
-    });
-    const colWidth = Math.min(55, Math.max(16, Math.min(maxLen + 4, 50)));
-    ws1.getColumn(c).width = colWidth;
-  }
-
-  // -------------------------------------------------------------
-  // TAB 2: Source Citations
-  // -------------------------------------------------------------
-  const ws2 = wb.addWorksheet('Source Citations', {
-    pageSetup: { orientation: 'landscape', paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
-  });
-  ws2.views = [{ state: 'frozen', ySplit: 4 }];
-
-  // Citations Banner
-  ws2.getRow(1).height = 26;
-  ws2.mergeCells(1, 1, 1, 4);
-  const ws2Banner = ws2.getCell(1, 1);
-  ws2Banner.value = 'PolicyPilot RAG — Verified Source Citations & Audit Passages';
-  ws2Banner.font = { name: 'Calibri', size: 14, bold: true, color: { argb: 'FFFFFFFF' } };
-  ws2Banner.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
-  ws2Banner.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
-  for (let c = 1; c <= 4; c++) {
-    ws2.getCell(1, c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
-  }
-
-  // Citations Accent Line
-  ws2.getRow(2).height = 3;
-  for (let c = 1; c <= 4; c++) {
-    ws2.getCell(2, c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF10B981' } };
-  }
-
-  // Blank row
-  ws2.getRow(3).height = 10;
-
-  // Citation Table Headers
-  ws2.getRow(4).height = 26;
-  const citeHeaders = ['CITATION ID', 'DOCUMENT NAME', 'PAGE REFERENCE', 'EXTRACTED PASSAGE'];
-  citeHeaders.forEach((ch, idx) => {
-    const cell = ws2.getCell(4, idx + 1);
-    cell.value = ch;
-    cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
-    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
-    cell.border = borderThin;
-    cell.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
-  });
-
-  let citeRow = 5;
-  if (citations && citations.length > 0) {
-    citations.forEach((cite, idx) => {
-      const isEven = idx % 2 === 0;
-      const fillZebra = { type: 'pattern', pattern: 'solid', fgColor: { argb: isEven ? 'FFFFFFFF' : 'FFF8FAFC' } };
-      const cid = typeof cite === 'object' && cite.citation_id ? cite.citation_id : `[${idx + 1}]`;
-      const fn = typeof cite === 'object' ? (cite.filename || 'Document') : cite;
-      const pg = typeof cite === 'object' ? (cite.page_or_section || 'Document Reference') : 'N/A';
-      const snip = typeof cite === 'object' ? cleanMarkdownArtifacts(cite.snippet || '') : 'Verified grounded passage.';
-
-      const values = [cid, fn, pg, snip];
-      values.forEach((v, vIdx) => {
-        const cell = ws2.getCell(citeRow, vIdx + 1);
-        cell.value = v;
-        cell.font = { name: 'Calibri', size: 9.5, color: { argb: 'FF334155' } };
-        cell.fill = fillZebra;
-        cell.border = borderLight;
-        cell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true, indent: 1 };
-      });
-      const lines = Math.ceil(snip.length / 50);
-      ws2.getRow(citeRow).height = Math.max(22, lines * 15 + 6);
-      citeRow++;
-    });
-  } else {
-    const defaultVals = ['[1]', scopeName, 'Validated Repository', 'Verified against active repository documents.'];
-    defaultVals.forEach((v, vIdx) => {
-      const cell = ws2.getCell(citeRow, vIdx + 1);
-      cell.value = v;
-      cell.font = { name: 'Calibri', size: 9.5, color: { argb: 'FF334155' } };
-      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFFFF' } };
-      cell.border = borderLight;
-      cell.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
-    });
-    ws2.getRow(citeRow).height = 24;
-  }
-
-  ws2.getColumn(1).width = 16;
-  ws2.getColumn(2).width = 30;
-  ws2.getColumn(3).width = 20;
-  ws2.getColumn(4).width = 55;
-
-  const buffer = await wb.xlsx.writeBuffer();
-  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${defaultFilename}_${Date.now()}.xlsx`;
-  a.click();
-  URL.revokeObjectURL(url);
 }
 
 function drawTableGridInPdf(doc, rows, startCursorY, margin, contentWidth, pageHeight) {
@@ -819,21 +437,22 @@ function parseDocumentBlocks(text) {
 
     // 2. Headings (# Heading or **Heading:**)
     if (line.startsWith('#') || (line.startsWith('**') && line.endsWith('**') && line.length < 75)) {
-      const cleanHeading = line.replace(/^#+\s*/, '').replace(/\*\*/g, '').trim();
-      blocks.push({ type: 'heading', text: cleanHeading });
+      const cleanHeading = cleanMarkdownArtifacts(line.replace(/^#+\s*/, ''));
+      if (cleanHeading) {
+        blocks.push({ type: 'heading', text: cleanHeading });
+      }
       i++;
       continue;
     }
 
     // 3. Bullets (*, -, +, \d+\.)
     if (/^[\*\-\+]\s+/.test(line) || /^\d+\.\s+/.test(line)) {
-      const cleanBullet = line
-        .replace(/^[\*\-\+]\s+/, '')
-        .replace(/^\d+\.\s+/, '')
-        .replace(/\*\*(.*?)\*\*/g, '$1')
-        .replace(/\*(.*?)\*/g, '$1')
-        .trim();
-      blocks.push({ type: 'bullet', text: cleanBullet });
+      const cleanBullet = cleanMarkdownArtifacts(
+        line.replace(/^[\*\-\+]\s+/, '').replace(/^\d+\.\s+/, '')
+      );
+      if (cleanBullet) {
+        blocks.push({ type: 'bullet', text: cleanBullet });
+      }
       i++;
       continue;
     }
@@ -849,11 +468,7 @@ function parseDocumentBlocks(text) {
       paraText += ' ' + nextL;
       i++;
     }
-    const cleanPara = paraText
-      .replace(/```[a-z]*\n?/g, '')
-      .replace(/\*\*(.*?)\*\*/g, '$1')
-      .replace(/\*(.*?)\*/g, '$1')
-      .trim();
+    const cleanPara = cleanMarkdownArtifacts(paraText);
     if (cleanPara) {
       blocks.push({ type: 'paragraph', text: cleanPara });
     }
@@ -862,137 +477,9 @@ function parseDocumentBlocks(text) {
   return blocks;
 }
 
-function escapeHtml(str) {
-  if (!str) return '';
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-function exportToWord(question, answer, citations, scopeName = 'All Policy Documents') {
-  const cleanQ = cleanMarkdownArtifacts(question || 'Policy Inquiry').replace(/[\n\r]+/g, ' ').trim();
-  const blocks = parseDocumentBlocks(answer || '');
-  const now = new Date();
-  const dateStr = now.toLocaleDateString('en-GB'); // DD/MM/YYYY
-  const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-  // Convert parsed blocks to clean Word HTML
-  let contentHtml = '';
-  blocks.forEach(b => {
-    if (b.type === 'heading') {
-      contentHtml += `<h3 style="color:#0f172a;font-size:12pt;font-weight:bold;margin-top:16pt;margin-bottom:6pt;">${escapeHtml(b.text)}</h3>`;
-    } else if (b.type === 'bullet') {
-      contentHtml += `<div style="margin-left:18pt;margin-bottom:4pt;line-height:1.45;"><span style="color:#059669;font-weight:bold;margin-right:6pt;">&bull;</span>${escapeHtml(b.text)}</div>`;
-    } else if (b.type === 'paragraph') {
-      contentHtml += `<p style="margin:6pt 0;line-height:1.5;color:#334155;text-align:justify;">${escapeHtml(b.text)}</p>`;
-    } else if (b.type === 'table') {
-      const cleanRows = b.rows
-        .map(r => r.map(c => cleanMarkdownArtifacts(c)))
-        .filter(r => r.some(c => c && c.length > 0));
-      const headers = cleanRows[0] || [];
-      const bodyRows = cleanRows.slice(1);
-      let tableHtml = `<table style="width:100%;border-collapse:collapse;margin:12pt 0;font-size:9.5pt;font-family:Calibri,sans-serif;"><thead><tr style="background-color:#0f172a;">`;
-      headers.forEach(h => {
-        tableHtml += `<th style="border:1pt solid #334155;padding:8pt 10pt;text-align:left;color:#ffffff;font-weight:bold;background-color:#0f172a;">${escapeHtml(h.toUpperCase())}</th>`;
-      });
-      tableHtml += `</tr></thead><tbody>`;
-      bodyRows.forEach((row, rIdx) => {
-        const bg = rIdx % 2 === 1 ? 'background-color:#f8fafc;' : 'background-color:#ffffff;';
-        tableHtml += `<tr style="${bg}">`;
-        row.forEach(cell => {
-          tableHtml += `<td style="border:1pt solid #e2e8f0;padding:6pt 9pt;vertical-align:top;color:#334155;line-height:1.4;">${escapeHtml(cell)}</td>`;
-        });
-        tableHtml += `</tr>`;
-      });
-      tableHtml += `</tbody></table>`;
-      contentHtml += tableHtml;
-    }
-  });
-
-  // Word Document MSO HTML Wrapper matching exact PDF styling
-  const wordDocumentHtml = `
-    <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-    <head>
-      <meta charset='utf-8'>
-      <title>PolicyPilot Report - ${escapeHtml(cleanQ)}</title>
-      <style>
-        @page { size: A4; margin: 20mm 20mm 20mm 20mm; mso-header-margin: 10mm; mso-footer-margin: 10mm; }
-        body { font-family: Calibri, 'Segoe UI', Arial, sans-serif; font-size: 10.5pt; color: #1e293b; line-height: 1.5; }
-        .banner { background-color: #0f172a; padding: 16pt 20pt; border-radius: 6pt; color: #ffffff; }
-        .banner-title { font-size: 18pt; font-weight: bold; margin: 0; color: #ffffff; }
-        .banner-accent { color: #10b981; }
-        .banner-sub { font-size: 8.5pt; color: #94a3b8; margin-top: 4pt; }
-        .meta-pill { font-size: 8pt; color: #10b981; font-weight: bold; text-align: right; }
-        .scope-box { background-color: #f8fafc; border: 1pt solid #cbd5e1; border-left: 4pt solid #10b981; padding: 10pt 14pt; margin: 14pt 0; border-radius: 4pt; }
-        .scope-title { font-size: 8.5pt; font-weight: bold; color: #059669; text-transform: uppercase; margin-bottom: 4pt; }
-        .scope-line { font-size: 9pt; color: #334155; margin: 3pt 0; }
-        .inquiry-label { font-size: 9pt; font-weight: bold; color: #475569; text-transform: uppercase; margin-top: 14pt; margin-bottom: 3pt; }
-        .inquiry-text { font-size: 10.5pt; color: #0f172a; margin-bottom: 12pt; line-height: 1.4; }
-        .findings-label { font-size: 9.5pt; font-weight: bold; color: #059669; text-transform: uppercase; margin-top: 16pt; margin-bottom: 8pt; border-bottom: 1pt solid #e2e8f0; padding-bottom: 4pt; }
-        .footer { font-size: 8pt; color: #94a3b8; border-top: 1pt solid #e2e8f0; margin-top: 26pt; padding-top: 8pt; text-align: center; }
-      </style>
-    </head>
-    <body>
-      <div class="banner">
-        <table style="width:100%;border:none;">
-          <tr>
-            <td style="border:none;">
-              <div class="banner-title">PolicyPilot <span class="banner-accent">RAG</span></div>
-              <div class="banner-sub">Enterprise Policy Compliance & Grounded Intelligence Report</div>
-            </td>
-            <td style="border:none;text-align:right;" class="meta-pill">
-              <div>VERIFICATION: 100% GROUNDED</div>
-              <div style="color:#cbd5e1;font-weight:normal;font-size:7.5pt;margin-top:2pt;">Date: ${dateStr} ${timeStr}</div>
-            </td>
-          </tr>
-        </table>
-      </div>
-      <div style="height:4pt;background-color:#10b981;margin-bottom:14pt;"></div>
-
-      <div class="scope-box">
-        <div class="scope-title">Executive Purpose & Document Scope</div>
-        <div class="scope-line">&bull; <strong>Purpose:</strong> Provides verified, policy-grounded provisions addressing "${escapeHtml(cleanQ)}".</div>
-        <div class="scope-line">&bull; <strong>Scope & Verification:</strong> Validated strictly against repository [${escapeHtml(scopeName)}] with zero-hallucination vector guarantee.</div>
-      </div>
-
-      <div class="inquiry-label">Policy Inquiry:</div>
-      <div class="inquiry-text">${escapeHtml(cleanQ)}</div>
-
-      <div class="findings-label">Verified Policy Findings & Details:</div>
-      ${contentHtml}
-
-      <div class="footer">
-        PolicyPilot RAG &bull; Confidential Enterprise Compliance &bull; Zero-Hallucination Vector Architecture
-      </div>
-    </body>
-    </html>
-  `;
-
-  const blob = new Blob(['\uFEFF' + wordDocumentHtml], { type: 'application/msword;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `policypilot_report_${Date.now()}.doc`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
 function ExportableCSVBlock({ rawCsv, scopeName = 'All Policy Documents', question = 'Policy Inquiry', citations = [], theme, showTopExports = true }) {
   const [viewMode, setViewMode] = useState('table'); // 'table' | 'raw'
   const rows = parseCsvToRows(rawCsv);
-
-  const handleDownloadCSV = () => {
-    if (!rows.length) return;
-    exportDataAsCsv(rows, 'policypilot_csv_matrix', scopeName, question, citations);
-  };
-
-  const handleDownloadExcel = () => {
-    if (!rows.length) return;
-    exportDataAsExcel(rows, scopeName, 'CSVMatrix', 'policypilot_csv_matrix', question, citations);
-  };
 
   const handleDownloadPdf = () => {
     if (!rows.length) return;
@@ -1036,46 +523,18 @@ function ExportableCSVBlock({ rawCsv, scopeName = 'All Policy Documents', questi
           </button>
 
           {showTopExports && (
-            <>
-              <button
-                onClick={handleDownloadCSV}
-                className={`px-2 py-1 rounded border transition-colors flex items-center gap-1 text-[11px] font-medium ${
-                  theme === 'dark'
-                    ? 'bg-slate-800 hover:bg-slate-750 text-slate-200 hover:text-emerald-300 border-slate-700'
-                    : 'bg-white hover:bg-slate-100 text-slate-800 hover:text-emerald-700 border-slate-300 shadow-xs'
-                }`}
-                title="Download this specific table as CSV"
-              >
-                <Download className="w-3 h-3" />
-                <span>CSV</span>
-              </button>
-
-              <button
-                onClick={handleDownloadExcel}
-                className={`px-2 py-1 rounded border transition-colors flex items-center gap-1 text-[11px] font-medium ${
-                  theme === 'dark'
-                    ? 'bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-300 border-emerald-800/80'
-                    : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-300 shadow-xs'
-                }`}
-                title="Download this specific table as Excel (.xlsx)"
-              >
-                <FileSpreadsheet className="w-3 h-3" />
-                <span>Excel</span>
-              </button>
-
-              <button
-                onClick={handleDownloadPdf}
-                className={`px-2 py-1 rounded border transition-colors flex items-center gap-1 text-[11px] font-medium ${
-                  theme === 'dark'
-                    ? 'bg-blue-950/60 hover:bg-blue-900/80 text-blue-300 border-blue-800/80'
-                    : 'bg-blue-50 hover:bg-blue-100 text-blue-800 border-blue-300 shadow-xs'
-                }`}
-                title="Download this specific table as PDF"
-              >
-                <FileDown className="w-3 h-3" />
-                <span>PDF</span>
-              </button>
-            </>
+            <button
+              onClick={handleDownloadPdf}
+              className={`px-2.5 py-1 rounded border transition-colors flex items-center gap-1.5 text-[11px] font-medium ${
+                theme === 'dark'
+                  ? 'bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-300 border-emerald-800/80'
+                  : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-300 shadow-xs'
+              }`}
+              title="Download this specific table as PDF"
+            >
+              <FileDown className="w-3 h-3 text-emerald-500" />
+              <span>Export PDF</span>
+            </button>
           )}
         </div>
       </div>
@@ -1134,18 +593,6 @@ function ExportableTable({ children, scopeName = 'All Policy Documents', questio
     }).filter(r => r.some(c => c && c.length > 0));
   };
 
-  const handleDownloadCSV = () => {
-    const data = extractTableData();
-    if (!data.length) return;
-    exportDataAsCsv(data, 'policypilot_table', scopeName, question, citations);
-  };
-
-  const handleDownloadExcel = () => {
-    const data = extractTableData();
-    if (!data.length) return;
-    exportDataAsExcel(data, scopeName, 'PolicyMatrix', 'policypilot_matrix', question, citations);
-  };
-
   const handleDownloadPdf = () => {
     const data = extractTableData();
     if (!data.length) return;
@@ -1165,44 +612,18 @@ function ExportableTable({ children, scopeName = 'All Policy Documents', questio
           <span>Policy Data Matrix</span>
         </span>
         {showTopExports && (
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleDownloadCSV}
-              className={`px-2 py-1 rounded border transition-colors flex items-center gap-1 text-[11px] font-medium ${
-                theme === 'dark'
-                  ? 'bg-slate-800 hover:bg-slate-750 text-slate-200 hover:text-emerald-300 border-slate-700'
-                  : 'bg-white hover:bg-slate-100 text-slate-800 hover:text-emerald-700 border-slate-300 shadow-xs'
-              }`}
-              title="Download this specific table as CSV"
-            >
-              <Download className="w-3 h-3" />
-              <span>CSV</span>
-            </button>
-            <button
-              onClick={handleDownloadExcel}
-              className={`px-2 py-1 rounded border transition-colors flex items-center gap-1 text-[11px] font-medium ${
-                theme === 'dark'
-                  ? 'bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-300 border-emerald-800/80'
-                  : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-300 shadow-xs'
-              }`}
-              title="Download this specific table as Excel (.xlsx)"
-            >
-              <FileSpreadsheet className="w-3 h-3" />
-              <span>Excel</span>
-            </button>
-            <button
-              onClick={handleDownloadPdf}
-              className={`px-2 py-1 rounded border transition-colors flex items-center gap-1 text-[11px] font-medium ${
-                theme === 'dark'
-                  ? 'bg-blue-950/60 hover:bg-blue-900/80 text-blue-300 border-blue-800/80'
-                  : 'bg-blue-50 hover:bg-blue-100 text-blue-800 border-blue-300 shadow-xs'
-              }`}
-              title="Download this specific table as PDF"
-            >
-              <FileDown className="w-3 h-3" />
-              <span>PDF</span>
-            </button>
-          </div>
+          <button
+            onClick={handleDownloadPdf}
+            className={`px-2.5 py-1 rounded border transition-colors flex items-center gap-1.5 text-[11px] font-medium ${
+              theme === 'dark'
+                ? 'bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-300 border-emerald-800/80'
+                : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-300 shadow-xs'
+            }`}
+            title="Download this specific table as PDF"
+          >
+            <FileDown className="w-3 h-3 text-emerald-500" />
+            <span>Export PDF</span>
+          </button>
         )}
       </div>
 
@@ -1434,6 +855,9 @@ const exportToPdf = (question, answer, citations, docScopeName = 'All Policy Doc
   doc.save(`policypilot_report_${Date.now()}.pdf`);
 };
 
+// Configurable API base URL for zero-cost distributed deployments (e.g. Vercel UI + Render API)
+const API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
+
 export default function App() {
   const [backendStatus, setBackendStatus] = useState('checking'); // 'healthy', 'waking'
   const [documents, setDocuments] = useState([]);
@@ -1447,7 +871,6 @@ export default function App() {
   const [isDragging, setIsDragging] = useState(false);
   const [expandedInspectors, setExpandedInspectors] = useState({});
   const [copiedId, setCopiedId] = useState(null);
-  const [activeExportMenuId, setActiveExportMenuId] = useState(null);
 
   // Theme state: 'dark' (default) or 'light'
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
@@ -1488,7 +911,7 @@ export default function App() {
   }, [messages, loading]);
 
   const checkHealth = () => {
-    fetch('/health')
+    fetch(`${API_BASE}/health`)
       .then(res => res.json())
       .then(data => {
         if (data.status === 'ok') setBackendStatus('healthy');
@@ -1499,7 +922,7 @@ export default function App() {
 
   const loadDocuments = async () => {
     try {
-      const res = await fetch('/api/documents');
+      const res = await fetch(`${API_BASE}/api/documents`);
       if (res.ok) {
         const data = await res.json();
         setDocuments(data || []);
@@ -1518,7 +941,7 @@ export default function App() {
     formData.append('file', file);
 
     try {
-      const res = await fetch('/api/documents', {
+      const res = await fetch(`${API_BASE}/api/documents`, {
         method: 'POST',
         body: formData,
       });
@@ -1549,7 +972,7 @@ export default function App() {
   const handleDeleteDocument = async (docId, filename) => {
     if (!confirm(`Delete '${filename}' and purge all its vectors from Qdrant Cloud?`)) return;
     try {
-      const res = await fetch(`/api/documents/${docId}`, { method: 'DELETE' });
+      const res = await fetch(`${API_BASE}/api/documents/${docId}`, { method: 'DELETE' });
       if (res.ok) {
         if (selectedDocId === docId) setSelectedDocId('all');
         await loadDocuments();
@@ -1580,7 +1003,7 @@ export default function App() {
         }
       }
 
-      const res = await fetch('/api/ask', {
+      const res = await fetch(`${API_BASE}/api/ask`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -2165,7 +1588,16 @@ export default function App() {
                           ? 'bg-[#1e2538] text-slate-100 border border-slate-700/60'
                           : 'bg-emerald-600 text-white border border-emerald-600 shadow-emerald-900/10'
                       }`}>
-                        <p className="leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                        <p
+                          dir={/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/.test(msg.content || '') ? 'rtl' : 'ltr'}
+                          className={`whitespace-pre-wrap ${
+                            /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/.test(msg.content || '')
+                              ? 'text-right font-urdu text-[15px]'
+                              : 'text-left leading-relaxed'
+                          }`}
+                        >
+                          {msg.content}
+                        </p>
                         <div className={`flex items-center justify-between gap-4 mt-2 pt-1 border-t text-[10px] ${
                           theme === 'dark'
                             ? 'border-slate-700/40 text-slate-400'
@@ -2228,11 +1660,18 @@ export default function App() {
                     )}
 
                     {/* Rich Markdown Output (with Tables, Lists, Code, Mermaid) */}
-                    <div className={`border rounded-2xl p-4 md:p-5 text-sm leading-relaxed shadow-sm ${
-                      theme === 'dark'
-                        ? 'bg-slate-900/40 border-slate-800/70 text-slate-200'
-                        : 'bg-white border-slate-200 text-slate-800'
-                    }`}>
+                    <div
+                      dir={/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/.test(msg.content || '') ? 'rtl' : 'ltr'}
+                      className={`border rounded-2xl p-4 md:p-5 text-sm shadow-sm ${
+                        /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/.test(msg.content || '')
+                          ? 'text-right font-urdu text-[15px]'
+                          : 'text-left leading-relaxed'
+                      } ${
+                        theme === 'dark'
+                          ? 'bg-slate-900/40 border-slate-800/70 text-slate-200'
+                          : 'bg-white border-slate-200 text-slate-800'
+                      }`}
+                    >
                       <ReactMarkdown
                         remarkPlugins={[remarkGfm]}
                         components={{
@@ -2455,87 +1894,23 @@ export default function App() {
                       <span className="font-mono">{msg.timestamp}</span>
                       <div className="flex items-center gap-2">
                         
-                        {/* Unified Export Menu Button */}
-                        <div className="relative">
-                          <button
-                            onClick={() => setActiveExportMenuId(activeExportMenuId === msg.id ? null : msg.id)}
-                            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-semibold transition-all shadow-xs ${
-                              theme === 'dark'
-                                ? 'bg-slate-900 border-slate-750 text-slate-200 hover:text-emerald-400 hover:border-emerald-500/50'
-                                : 'bg-white border-slate-300 text-slate-800 hover:text-emerald-700 hover:border-emerald-500'
-                            }`}
-                            title="Export response in multiple formats"
-                          >
-                            <Download className="w-3.5 h-3.5 text-emerald-500" />
-                            <span>Export</span>
-                            <ChevronDown className={`w-3 h-3 transition-transform ${activeExportMenuId === msg.id ? 'rotate-180' : ''}`} />
-                          </button>
-
-                          {activeExportMenuId === msg.id && (
-                            <>
-                              {/* Overlay to close menu on outside click */}
-                              <div
-                                className="fixed inset-0 z-30"
-                                onClick={() => setActiveExportMenuId(null)}
-                              />
-                              
-                              {/* Export Options Popup Menu */}
-                              <div className={`absolute right-0 bottom-full mb-1.5 w-60 rounded-xl border p-1.5 shadow-2xl z-40 animate-fade-in ${
-                                theme === 'dark'
-                                  ? 'bg-[#0f172a] border-slate-700/90 text-slate-200 shadow-black/80'
-                                  : 'bg-white border-slate-300 text-slate-900 shadow-slate-400/30'
-                              }`}>
-                                <div className={`px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider border-b mb-1 ${
-                                  theme === 'dark' ? 'border-slate-800 text-slate-400' : 'border-slate-200 text-slate-500'
-                                }`}>
-                                  Select Export Format
-                                </div>
-
-                                {/* 1. Export PDF */}
-                                <button
-                                  onClick={() => {
-                                    setActiveExportMenuId(null);
-                                    const msgIdx = messages.findIndex(m => m.id === msg.id);
-                                    const qText = msgIdx > 0 ? messages[msgIdx - 1]?.content : 'Policy Inquiry';
-                                    exportToPdf(qText, msg.content, msg.citations, activeDocName);
-                                  }}
-                                  className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-medium transition-colors text-left ${
-                                    theme === 'dark'
-                                      ? 'hover:bg-slate-800/90 hover:text-emerald-300'
-                                      : 'hover:bg-slate-100 hover:text-emerald-800'
-                                  }`}
-                                >
-                                  <FileDown className="w-4 h-4 text-emerald-500 shrink-0" />
-                                  <div>
-                                    <div className="font-semibold leading-tight">Export as PDF (.pdf)</div>
-                                    <div className={`text-[10px] ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>Executive compliance report with verified policy findings</div>
-                                  </div>
-                                </button>
-
-                                {/* 2. Export Word Document */}
-                                <button
-                                  onClick={() => {
-                                    setActiveExportMenuId(null);
-                                    const msgIdx = messages.findIndex(m => m.id === msg.id);
-                                    const qText = msgIdx > 0 ? messages[msgIdx - 1]?.content : 'Policy Inquiry';
-                                    exportToWord(qText, msg.content, msg.citations, activeDocName);
-                                  }}
-                                  className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-medium transition-colors text-left ${
-                                    theme === 'dark'
-                                      ? 'hover:bg-slate-800/90 hover:text-blue-300'
-                                      : 'hover:bg-slate-100 hover:text-blue-800'
-                                  }`}
-                                >
-                                  <FileText className="w-4 h-4 text-blue-500 shrink-0" />
-                                  <div>
-                                    <div className="font-semibold leading-tight">Export as Word (.doc)</div>
-                                    <div className={`text-[10px] ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>Formatted Microsoft Word document with executive branding</div>
-                                  </div>
-                                </button>
-                              </div>
-                            </>
-                          )}
-                        </div>
+                        {/* Direct Export as PDF Button */}
+                        <button
+                          onClick={() => {
+                            const msgIdx = messages.findIndex(m => m.id === msg.id);
+                            const qText = msgIdx > 0 ? messages[msgIdx - 1]?.content : 'Policy Inquiry';
+                            exportToPdf(qText, msg.content, msg.citations, activeDocName);
+                          }}
+                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-semibold transition-all shadow-xs ${
+                            theme === 'dark'
+                              ? 'bg-slate-900 border-slate-750 text-slate-200 hover:text-emerald-400 hover:border-emerald-500/50'
+                              : 'bg-white border-slate-300 text-slate-800 hover:text-emerald-700 hover:border-emerald-500'
+                          }`}
+                          title="Export response as PDF"
+                        >
+                          <FileDown className="w-3.5 h-3.5 text-emerald-500" />
+                          <span>Export PDF</span>
+                        </button>
 
                         {/* Copy Answer Button */}
                         <button

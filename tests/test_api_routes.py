@@ -5,6 +5,7 @@ from app.api.routes import DOCUMENT_REGISTRY
 from app.schemas import AskRequest
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_health_endpoint():
     """Verify health probe returns status ok and Qdrant connectivity."""
@@ -14,6 +15,7 @@ async def test_health_endpoint():
     assert res.environment == "development"
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_ask_endpoint_direct():
     """Verify /api/ask returns a valid structured AskResponse with citations."""
@@ -27,6 +29,7 @@ async def test_ask_endpoint_direct():
     assert "New York City" in res.citations[0].snippet or "$75" in res.answer
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_ask_endpoint_unanswerable():
     """Verify /api/ask returns refusal on unanswerable out-of-domain questions."""

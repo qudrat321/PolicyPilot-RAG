@@ -16,6 +16,7 @@ class Settings(BaseSettings):
 
     # Application limits and thresholds
     environment: str = "development"
+    cors_origins: str = "*"  # Comma-separated domains e.g. "https://policypilot.vercel.app,http://localhost:3000" or "*"
     log_level: str = "INFO"
     max_upload_size_mb: int = 5
     max_table_rows: int = 300

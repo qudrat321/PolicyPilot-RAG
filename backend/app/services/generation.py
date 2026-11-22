@@ -34,10 +34,14 @@ STRICT GROUNDING RULES:
 OUTPUT FORMATTING & USER INSTRUCTIONS:
 - LANGUAGE, SCRIPT & TONE ALIGNMENT:
   - Mirror the User's Language, Script, and Tone: Always respond in the exact language, script, and conversational tone used by the user:
-    * If the user asks in English, reply in English.
-    * If the user asks in Roman Urdu (e.g. 'policy ka rule kya hai', 'chutti kaise milegi'), reply in natural, conversational Roman Urdu (e.g. 'Company policy ke mutabiq, annual leave... [1]').
-    * If the user asks in Urdu (اردو in Nastaliq script), reply strictly in natural, professional Urdu (اردو) script with citations [1], [2].
-    * If the user asks in Pashto (پښتو), reply strictly in natural, professional Pashto (پښتو) script with citations [1], [2].
+    * If the user asks in English, reply in clear, professional English.
+    * If the user asks in Roman Urdu (e.g. 'policy ka rule kya hai', 'chutti kaise milegi'), reply in natural, fluent, conversational Roman Urdu (e.g. 'Company policy ke mutabiq, annual leave... [1]').
+    * If the user asks in Urdu (اردو in Nastaliq/Arabic script), reply strictly in natural, professional, grammatically flawless Urdu (بامحاورہ، معیاری، اور شستہ اردو):
+      - Use standard policy terminology (e.g. قواعد و ضوابط، پالیسی، استحقاق، چھٹی، حاضری، اجازت نامہ).
+      - Structure the answer with clear section headings (عنوانات) and distinct bullet points (نکات) so the text is immediately readable, coherent, and well-organized.
+      - Maintain natural Urdu sentence structure (فاعل، مفعول، فعل). Never output fragmented, inverted, or mechanical word-for-word machine translation.
+      - Place bracketed citation tags [1], [2] at the end of each sentence or clause with proper spacing.
+    * If the user asks in Pashto (پښتو), reply strictly in natural, professional Pashto (پښتو) script with clear structure and citations [1], [2].
     * If the user asks in any other language, reply in that exact same language and script.
   - Retain all citation bracketed numbers [1], [2] next to each factual statement regardless of target language.
 - TABLE REQUESTS: If the user asks for a table or matrix format (e.g. 'in table form', 'create a table'), format the response as a clean Markdown table with headers and alignment.
@@ -176,7 +180,7 @@ STRICT CONVERSION & GROUNDING RULES:
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_INSTRUCTION,
                 temperature=0.1,
-                max_output_tokens=700,
+                max_output_tokens=1500,
             ),
         )
     except Exception:
@@ -187,7 +191,7 @@ STRICT CONVERSION & GROUNDING RULES:
                 config=types.GenerateContentConfig(
                     system_instruction=SYSTEM_INSTRUCTION,
                     temperature=0.1,
-                    max_output_tokens=700,
+                    max_output_tokens=1500,
                 ),
             )
         except Exception as e:
@@ -221,7 +225,7 @@ def generate_grounded_answer(
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_INSTRUCTION,
                 temperature=0.1,  # Low temperature to eliminate hallucination
-                max_output_tokens=600,
+                max_output_tokens=1500,
             ),
         )
     except Exception:
@@ -233,7 +237,7 @@ def generate_grounded_answer(
                 config=types.GenerateContentConfig(
                     system_instruction=SYSTEM_INSTRUCTION,
                     temperature=0.1,
-                    max_output_tokens=600,
+                    max_output_tokens=1500,
                 ),
             )
         except Exception as e:

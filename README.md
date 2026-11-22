@@ -17,9 +17,9 @@
 - **📊 Tabular & Multi-Sheet Excel Mastery**:
   - Native streaming extraction for CSV and multi-sheet `.xlsx` files using `openpyxl` with header-preserving Markdown chunking.
   - Interactive **Raw CSV vs. Grid View** toggle directly inside assistant answers.
-- **💾 Enterprise Multi-Format Export**:
-  - **Export CSV & Formatted Excel (.xlsx)**: One-click export including an automated 2-line executive summary preamble and verification metadata.
-  - **Branded Enterprise PDF Report**: Generates formatted PDF compliance documents with executive headers, policy findings, and full citation audit trails.
+- **📄 High-Fidelity Executive PDF Export**:
+  - **Zero-Distortion PDF Generation**: Single-click PDF export delivering boardroom-ready compliance reports with Deep Slate & Emerald branding, dynamic Purpose & Scope metadata, auto-wrapped table columns, and zero Markdown artifacts (`**`, `*`, `_`).
+  - Purged all non-PDF exports (CSV, Excel, Word) across backend and frontend to ensure a focused, uncompromised, and 100% compliant reporting workflow.
 - **🌐 Conversational Intelligence & Multilingual Follow-ups**:
   - Full multi-turn conversation memory with support for dynamic translation/reformat requests (e.g. *"above in urdu"*, *"summarize in Roman Urdu"*, *"convert to bullet points"*) without false retrieval rejections.
 - **🌓 Dual-Theme Interface (Dark & High-Contrast Normal Mode)**:
@@ -235,6 +235,37 @@ To produce a production build:
 npm run build --prefix frontend
 ```
 
+### 5. Running Automated Tests
+
+PolicyPilot features a clean test suite partitioned into fast offline unit tests and live cloud integration tests:
+
+```bash
+# A. Fast Offline Unit Tests (<2 seconds, zero network required):
+pytest -m "not integration" -v
+
+# B. Live Cloud Integration Tests (Validates live Qdrant Cloud & Google Gemini AI Studio):
+pytest -m "integration" -v
+
+# C. Run Complete Test Suite (17/17 tests passing):
+pytest -v
+```
+
+> [!TIP]
+> **Why do live tests take longer (~20s)?**
+> The integration tests communicate with live Google Gemini AI Studio APIs (generating 768-dim embeddings and LLM reasoning) and live Qdrant Cloud clusters across HTTPS. To ensure resilience and avoid hitting Google AI Studio's 15 RPM free-tier rate limits, requests include retry backoffs and throttled pacing. The offline unit suite (`pytest -m "not integration"`) runs completely locally in under 2 seconds.
+
+---
+
+## 🌐 100% Free ($0/Month) Cloud Deployment
+
+PolicyPilot RAG is engineered from the ground up to run permanently on free-tier cloud infrastructure with **zero credit card required** and **$0 monthly cloud spend**:
+
+* **Detailed Deployment Guide**: See [docs/FREE_DEPLOYMENT_GUIDE.md](file:///c:/Users/qudra/OneDrive/Desktop/I%20E%20C%20Bootcampl/PolicyPilot-RAG/PolicyPilot-RAG/docs/FREE_DEPLOYMENT_GUIDE.md) for full click-by-click instructions.
+* **Frontend CDN**: Deployed to **Vercel** or **Cloudflare Pages** using `frontend/vercel.json` (global edge CDN, auto-SSL, instant builds).
+* **Backend Web Service**: Deployed to **Render** via `render.yaml` or **Hugging Face Spaces** using the multi-stage `Dockerfile` (<120MB RAM, single worker).
+* **Vector Database**: Hosted on **Qdrant Cloud Free Tier** (1GB RAM, 4GB SSD, free forever).
+* **Cold-Start Elimination**: Continuous keep-alive ping via **UptimeRobot** querying `/health` every 14 minutes.
+
 ---
 
 ## 🚦 Current Progress & Milestone Verification
@@ -248,7 +279,7 @@ npm run build --prefix frontend
 | **Move 4: Golden Evaluation** | ✅ Completed | 25-question golden benchmark: Hit@3: 100%, MRR: 1.0, Refusal Accuracy: 100% |
 | **Move 5: FastAPI REST APIs** | ✅ Completed | Upload, list, delete, ask, and health endpoints (3/3 passed) |
 | **Move 6: React Frontend & Dual Theme** | ✅ Completed | Dark & high-contrast Normal mode, cold-start status probe & render.yaml |
-| **Move 7: Data Intelligence & Export** | ✅ Completed | Interactive CSV grid/raw view, formatted Excel (.xlsx) export, and branded PDF generation |
+| **Move 7: Data Intelligence & PDF Export** | ✅ Completed | Interactive CSV grid/raw view and executive branded PDF report generation |
 | **Move 8: Conversational Multilingual** | ✅ Completed | History-aware translations/reformulations (Urdu, Roman Urdu, English) with zero false refusals |
 
-**Current Status**: All milestones completed and verified! Total test suite: **16/16 tests passing**. Production build verified and deployed.
+**Current Status**: All milestones completed and verified! Total test suite: **17/17 tests passing (100%)**. Production build verified and ready for deployment.

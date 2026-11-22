@@ -24,7 +24,6 @@ from app.services.generation import (
     is_translation_or_reformat_request,
     translate_or_reformat_previous_answer,
 )
-from app.services.excel_export import export_to_excel_bytes
 from fastapi.responses import Response
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
@@ -230,30 +229,4 @@ async def ask_policy_question(payload: AskRequest):
         doc_id=payload.doc_id,
         file_hash=payload.file_hash,
         history=payload.history,
-    )
-
-
-class ExcelExportRequest(BaseModel):
-    rows: List[List[str]]
-    scope_name: str = "All Policy Documents"
-    question: str = "Policy Inquiry"
-    answer: str = ""
-    citations: Optional[List[Dict[str, Any]]] = None
-
-
-@router.post("/export/excel")
-async def export_excel_endpoint(payload: ExcelExportRequest):
-    """Generate and return an openpyxl-branded PolicyPilot Excel spreadsheet."""
-    data = await asyncio.to_thread(
-        export_to_excel_bytes,
-        rows=payload.rows,
-        scope_name=payload.scope_name,
-        question=payload.question,
-        answer=payload.answer,
-        citations=payload.citations or [],
-    )
-    return Response(
-        content=data,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f"attachment; filename=policypilot_report_{int(time.time())}.xlsx"},
     )

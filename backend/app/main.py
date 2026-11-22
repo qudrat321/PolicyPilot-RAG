@@ -12,14 +12,25 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# Enable CORS for React frontend (Vercel / Cloudflare / Localhost)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Configure CORS for React frontend (Vercel, Cloudflare Pages, Localhost, or Wildcard)
+raw_cors = settings.cors_origins.strip()
+if raw_cors == "*" or not raw_cors:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+else:
+    allowed_list = [origin.strip() for origin in raw_cors.split(",") if origin.strip()]
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=allowed_list,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 # Mount API routes
 app.include_router(api_router)

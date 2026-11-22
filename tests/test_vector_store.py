@@ -11,6 +11,7 @@ from app.services.vector_store import (
 )
 
 
+@pytest.mark.integration
 def test_embedding_generation():
     """Verify Google GenAI produces 768-dimensional embedding vectors."""
     text = "The organization provides a $500 home office equipment stipend."
@@ -26,11 +27,13 @@ def test_embedding_generation():
     assert len(vectors[1]) == VECTOR_DIMENSION
 
 
+@pytest.mark.integration
 def test_qdrant_cloud_connection():
     """Verify active connection to Qdrant Cloud free cluster."""
     assert check_qdrant_health() is True
 
 
+@pytest.mark.integration
 def test_qdrant_upsert_search_and_delete():
     """End-to-end test: upsert chunks with hash, perform similarity search, and delete."""
     test_doc_id = "test_doc_999"
@@ -88,6 +91,7 @@ def test_qdrant_upsert_search_and_delete():
     assert len(matching_deleted) == 0
 
 
+@pytest.mark.integration
 def test_storage_quota_guard():
     """Verify that quota check handles capacity safely without errors."""
     evicted = enforce_storage_quota(max_vectors=999999)  # High limit -> no eviction

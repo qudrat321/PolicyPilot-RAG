@@ -5,6 +5,7 @@ services:
     dockerfilePath: Dockerfile
     plan: free
     region: oregon
+    healthCheckPath: /health
     envVars:
       - key: GEMINI_API_KEY
         sync: false
@@ -16,7 +17,11 @@ services:
         value: policy_documents
       - key: ENVIRONMENT
         value: production
+      - key: CORS_ORIGINS
+        value: "*"
       - key: SIMILARITY_THRESHOLD
         value: 0.58
       - key: TOP_K_CHUNKS
-        value: 5
+        value: 4
+      - key: MAX_TOTAL_VECTORS
+        value: 1500

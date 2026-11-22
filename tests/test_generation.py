@@ -54,6 +54,7 @@ def test_citation_cleaning_and_verification():
     assert "[1]" in clean_answer
 
 
+@pytest.mark.integration
 def test_live_grounded_generation():
     """Verify Gemini Flash answers accurately and cites the provided context block."""
     valid_chunks = [

@@ -28,6 +28,43 @@
 
 ---
 
+## 📸 Application Showcase & User Experience
+
+Explore PolicyPilot RAG's grounded workflow, transparent citations, and executive compliance reporting:
+
+### 1. Central Knowledge Base & Query Dashboard
+**Image Source**: [`./docs/assets/main_dasboard.png`](./docs/assets/main_dasboard.png)
+
+<p align="center">
+  <img src="./docs/assets/main_dasboard.png" alt="PolicyPilot Central Dashboard" width="100%"/>
+</p>
+
+> **Central Knowledge Base**: Features real-time Qdrant Cloud vector status, SHA-256 deduplication, active anti-hallucination threshold monitoring (0.58), multi-format file ingestion (PDF, DOCX, XLSX, CSV, PPTX, HTML), and one-click query suggestions.
+
+---
+
+### 2. Multi-Document Grounded Q&A with Live Citations
+**Image Source**: [`./docs/assets/response_screen.jpg`](./docs/assets/response_screen.jpg)
+
+<p align="center">
+  <img src="./docs/assets/response_screen.jpg" alt="Policy Comparison and Citation Matrix" width="100%"/>
+</p>
+
+> **Transparent Grounding & Cross-Comparison**: Grounded synthesis comparing enterprise security and hospitality operational policies. Every assertion cites exact document pages (`[1]`, `[2]`, `[3]`), accompanied by an expandable 4-chunk retrieval audit trail (`Score: 0.6900`), copy answers, and dedicated table-level PDF download.
+
+---
+
+### 3. Boardroom-Ready Executive PDF Compliance Report
+**Image Source**: [`./docs/assets/pdf_export.jpg`](./docs/assets/pdf_export.jpg)
+
+<p align="center">
+  <img src="./docs/assets/pdf_export.jpg" alt="Executive PDF Compliance Report" width="85%"/>
+</p>
+
+> **High-Fidelity PDF Compliance Export**: Single-click boardroom-ready report featuring Deep Slate & Emerald corporate branding, dynamic Purpose & Scope verification headers, auto-wrapped data tables, and zero raw markdown artifacts.
+
+---
+
 ## 🏗️ System Architecture
 
 ![System Architecture](docs/assets/system_architecture.png)
@@ -159,7 +196,6 @@ To prevent hallucinations, PolicyPilot applies a 3-layer verification firewall:
 | **Gate 3: Citation Validator** | Validates `[1]`, `[2]` tags against real chunks; strips fabricated references | `backend/app/services/guardrails.py` | `validate_and_clean_citations()` |
 | **Gate 4: Storage Quota Guard** | SHA-256 deduplication (0 tokens on re-upload) & LRU eviction for Qdrant | `backend/app/services/vector_store.py`<br/>`backend/app/ingestion/validation.py` | `find_document_by_hash()`<br/>`check_and_evict_lru()` |
 
-
 ---
 
 ## 📁 Dedicated Professional Folder Structure
@@ -182,9 +218,15 @@ PolicyPilot-RAG/
 ├── docs/                        # Complete project documentation & visual charts
 │   ├── PROJECT_BLUEPRINT.md     # Full architectural specification with embedded visual charts
 │   ├── TASK_CHECKLIST.md        # Living milestone verification gates
-│   └── assets/                  # High-resolution visual SVG diagrams for architecture & workflows
+│   └── assets/                  # High-resolution visual screenshots & SVG diagrams
+│       ├── main_dasboard.png    # Live Central Knowledge Base & Dashboard UI
+│       ├── response_screen.jpg  # Grounded Q&A with live citations & audit trail
+│       ├── pdf_export.jpg       # Executive boardroom-ready PDF compliance export
+│       ├── system_architecture.png
+│       ├── ingestion_query_workflow.png
+│       └── anti_hallucination_firewall.png
 ├── tests/                       # Automated testing & QA suite
-│   └── test_ingestion.py        # Move 1 ingestion tests (5/5 passing)
+│   └── test_ingestion.py        # Ingestion tests
 ├── evals/                       # Evaluation harness & golden benchmark
 │   ├── golden_set.jsonl         # 25 curated policy test cases
 │   ├── metrics.py               # Hit@k, MRR, Faithfulness formulas
@@ -260,7 +302,7 @@ pytest -v
 
 PolicyPilot RAG is engineered from the ground up to run permanently on free-tier cloud infrastructure with **zero credit card required** and **$0 monthly cloud spend**:
 
-* **Detailed Deployment Guide**: See [docs/FREE_DEPLOYMENT_GUIDE.md](file:///c:/Users/qudra/OneDrive/Desktop/I%20E%20C%20Bootcampl/PolicyPilot-RAG/PolicyPilot-RAG/docs/FREE_DEPLOYMENT_GUIDE.md) for full click-by-click instructions.
+* **Detailed Deployment Guide**: See [docs/FREE_DEPLOYMENT_GUIDE.md](docs/FREE_DEPLOYMENT_GUIDE.md) for full click-by-click instructions.
 * **Frontend CDN**: Deployed to **Vercel** or **Cloudflare Pages** using `frontend/vercel.json` (global edge CDN, auto-SSL, instant builds).
 * **Backend Web Service**: Deployed to **Render** via `render.yaml` or **Hugging Face Spaces** using the multi-stage `Dockerfile` (<120MB RAM, single worker).
 * **Vector Database**: Hosted on **Qdrant Cloud Free Tier** (1GB RAM, 4GB SSD, free forever).

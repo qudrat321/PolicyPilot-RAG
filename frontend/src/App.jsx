@@ -328,12 +328,86 @@ export default function App() {
     if (file) handleFileUpload(file);
   };
 
-  const starterQuestions = [
-    'Summarize the primary code of conduct policies',
-    'Compare policy rules in a structured table format',
-    'Explain the violation reporting process in exactly two sentences',
-    'Create a flowchart diagram of the disciplinary and escalation steps'
-  ];
+  // Dynamically compute starter questions based on selected document or all documents
+  const getStarterQuestions = () => {
+    if (selectedDocId !== 'all') {
+      const activeDoc = documents.find(d => d.doc_id === selectedDocId);
+      if (activeDoc) {
+        const fname = activeDoc.filename.toLowerCase();
+        const baseName = activeDoc.filename.replace(/\.[^/.]+$/, "");
+
+        // If spreadsheet / tabular data (CSV / XLSX / rates / expenses)
+        if (fname.endsWith('.csv') || fname.endsWith('.xlsx') || fname.includes('rate') || fname.includes('per_diem') || fname.includes('expense')) {
+          return [
+            `Show a structured table summarizing the rates and tiers in ${activeDoc.filename}`,
+            `What are the maximum allowances and reimbursement limits in ${baseName}?`,
+            `Explain the expense approval conditions in exactly two sentences`,
+            `Create a formatted comparison table of high-cost vs low-cost tiers`
+          ];
+        }
+
+        // If conduct / ethics / disciplinary policy
+        if (fname.includes('conduct') || fname.includes('ethic') || fname.includes('discipline')) {
+          return [
+            `Summarize the primary ethical guidelines and rules in ${activeDoc.filename}`,
+            `What are the mandatory reporting channels and procedures for violations?`,
+            `Create a flowchart diagram of the disciplinary escalation process`,
+            `List the key violations and consequences in a structured table format`
+          ];
+        }
+
+        // If remote work / attendance / HR policy
+        if (fname.includes('remote') || fname.includes('work') || fname.includes('leave') || fname.includes('hr')) {
+          return [
+            `Summarize the primary eligibility and policy rules in ${activeDoc.filename}`,
+            `What equipment, allowances, or stipends are provided in this policy?`,
+            `Explain employee obligations and notice requirements in two sentences`,
+            `Create a table comparing responsibilities vs company allowances`
+          ];
+        }
+
+        // General selected document
+        return [
+          `Summarize the key sections and policy guidelines in ${activeDoc.filename}`,
+          `Create a structured overview table of all major rules and conditions in ${activeDoc.filename}`,
+          `Explain the most critical requirement in ${baseName} in exactly two sentences`,
+          `Create a flowchart diagram illustrating the workflow in ${activeDoc.filename}`
+        ];
+      }
+    }
+
+    // Default: Search across all documents
+    if (documents.length > 1) {
+      return [
+        `Summarize the core policy provisions across all ${documents.length} indexed documents`,
+        `Create a unified table comparing the key rules and allowances from all documents`,
+        `What are the main compliance procedures mentioned across these policies?`,
+        `Create a workflow diagram representing the primary guidelines in these policies`
+      ];
+    }
+
+    if (documents.length === 1) {
+      const singleDoc = documents[0];
+      return [
+        `Summarize the primary guidelines in ${singleDoc.filename}`,
+        `Create a structured table of the key provisions in ${singleDoc.filename}`,
+        `Explain the essential compliance rules in exactly two sentences`,
+        `Create a flowchart diagram representing the main procedure in ${singleDoc.filename}`
+      ];
+    }
+
+    return [
+      'Summarize the primary code of conduct policies',
+      'Compare policy rules in a structured table format',
+      'Explain the violation reporting process in exactly two sentences',
+      'Create a flowchart diagram of the disciplinary and escalation steps'
+    ];
+  };
+
+  const starterQuestions = getStarterQuestions();
+  const activeDocName = selectedDocId === 'all'
+    ? (documents.length > 0 ? `All Documents (${documents.length})` : 'All Documents')
+    : documents.find(d => d.doc_id === selectedDocId)?.filename || 'Selected Policy';
 
   return (
     <div className="flex h-screen bg-[#07090e] text-slate-100 font-sans antialiased overflow-hidden">
@@ -590,9 +664,14 @@ export default function App() {
 
               {/* Starter Prompt Chips */}
               <div className="pt-2">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
-                  Suggested Questions &amp; Formats
-                </p>
+                <div className="flex items-center justify-between mb-3 px-1">
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                    Suggested Questions &amp; Formats
+                  </p>
+                  <span className="text-[11px] font-mono text-emerald-400 bg-emerald-950/60 border border-emerald-800/80 px-2 py-0.5 rounded truncate max-w-[220px]">
+                    Scope: {activeDocName}
+                  </span>
+                </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-left">
                   {starterQuestions.map((q, idx) => (
                     <button

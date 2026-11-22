@@ -19,7 +19,11 @@ from app.services.vector_store import (
     find_document_by_hash,
 )
 from app.services.retrieval import retrieve_context
-from app.services.generation import generate_grounded_answer
+from app.services.generation import (
+    generate_grounded_answer,
+    is_translation_or_reformat_request,
+    translate_or_reformat_previous_answer,
+)
 
 router = APIRouter(prefix="/api", tags=["Policy Engine"])
 
@@ -125,10 +129,64 @@ async def delete_document(doc_id: str):
     return {"status": "deleted", "doc_id": doc_id}
 
 
-def _sync_ask(question: str, doc_id: str = None, file_hash: str = None) -> AskResponse:
+def _sync_ask(
+    question: str,
+    doc_id: str = None,
+    file_hash: str = None,
+    history: list = None,
+) -> AskResponse:
     """Worker function for retrieval and generation executed in threadpool."""
+    # 1. Check for conversational translation/reformatting of previous grounded turn
+    if history and is_translation_or_reformat_request(question):
+        last_assistant = None
+        for h in reversed(history):
+            if h.get("role") == "assistant" and h.get("content") and not h.get("is_refusal"):
+                last_assistant = h
+                break
+
+        if last_assistant:
+            prev_answer = last_assistant.get("content", "")
+            prev_chunks = last_assistant.get("retrieved_chunks", [])
+            answer, citations, is_refusal = translate_or_reformat_previous_answer(
+                instruction=question,
+                previous_answer=prev_answer,
+                previous_chunks=prev_chunks,
+            )
+            # Reconstruct retrieved details from previous turn
+            retrieved_details = [
+                ChunkDetail(
+                    chunk_id=c.get("chunk_id", ""),
+                    doc_id=c.get("doc_id", ""),
+                    filename=c.get("filename", ""),
+                    page_or_section=c.get("page_or_section", ""),
+                    sheet_name=c.get("sheet_name"),
+                    row_range=c.get("row_range"),
+                    score=float(c.get("score", 0.85)),
+                    text=c.get("text", ""),
+                )
+                for c in prev_chunks
+            ]
+            return AskResponse(
+                question=question,
+                answer=answer,
+                is_refusal=is_refusal,
+                citations=citations,
+                retrieved_chunks=retrieved_details,
+            )
+
+    # 2. Contextualize search query if it's a short follow-up referencing previous turn
+    search_query = question
+    if history:
+        last_user = None
+        for h in reversed(history):
+            if h.get("role") == "user" and h.get("content"):
+                last_user = h.get("content")
+                break
+        if last_user and len(question.split()) <= 6:
+            search_query = f"{last_user} {question}"
+
     chunks = retrieve_context(
-        question=question,
+        question=search_query,
         filter_doc_id=doc_id,
         filter_file_hash=file_hash,
     )
@@ -167,4 +225,5 @@ async def ask_policy_question(payload: AskRequest):
         question=question,
         doc_id=payload.doc_id,
         file_hash=payload.file_hash,
+        history=payload.history,
     )

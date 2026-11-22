@@ -25,9 +25,10 @@ class ChunkDetail(BaseModel):
 
 class AskRequest(BaseModel):
     """Incoming request when a user asks a policy question."""
-    question: str = Field(..., min_length=3, max_length=500, description="Visitor query")
+    question: str = Field(..., min_length=1, max_length=500, description="Visitor query")
     doc_id: Optional[str] = Field(default=None, description="Optional doc_id to scope retrieval to a specific document")
     file_hash: Optional[str] = Field(default=None, description="Optional file_hash to scope retrieval")
+    history: Optional[List[dict]] = Field(default_factory=list, description="Recent conversation history turns")
 
 
 class AskResponse(BaseModel):

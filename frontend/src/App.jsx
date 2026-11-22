@@ -658,7 +658,16 @@ export default function App() {
   const executeAskQuery = async (query, baseMessages) => {
     setLoading(true);
     try {
-      const payload = { question: query };
+      const payload = {
+        question: query,
+        history: (baseMessages || []).slice(-6).map(m => ({
+          role: m.role,
+          content: m.content,
+          is_refusal: m.is_refusal,
+          citations: m.citations || [],
+          retrieved_chunks: m.retrieved_chunks || []
+        }))
+      };
       if (selectedDocId !== 'all') {
         const activeDoc = documents.find(d => d.doc_id === selectedDocId);
         if (activeDoc) {

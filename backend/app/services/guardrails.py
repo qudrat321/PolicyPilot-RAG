@@ -6,6 +6,20 @@ from app.schemas import Citation
 
 REFUSAL_MESSAGE = "The provided documents do not contain sufficient information to answer this question."
 
+def get_refusal_message(question: str) -> str:
+    """Return refusal message matching the language and script of the user question."""
+    if not question:
+        return REFUSAL_MESSAGE
+    q = question.strip().lower()
+    # Check if Urdu script
+    if any('\u0600' <= char <= '\u06FF' for char in question):
+        return "فراہم کردہ دستاویزات میں اس سوال کا جواب دینے کے لیے کافی معلومات موجود نہیں ہیں۔"
+    # Check if Roman Urdu
+    roman_urdu_words = ["kya", "hai", "hain", "kaise", "kaisay", "mein", "batao", "chutti", "miley", "milegi", "sakta", "sakti", "maloomat", "bhi"]
+    if any(w in q.split() for w in roman_urdu_words) or "urdu" in q:
+        return "Dastiyab documents mein is sawal ka jawab dainay ke liye kafi maloomat mojood nahi hain."
+    return REFUSAL_MESSAGE
+
 
 def is_refusal_required(chunks: List[Dict[str, Any]], threshold: float = None) -> bool:
     """Return True if evidence is weak or absent, saving LLM tokens by refusing immediately."""

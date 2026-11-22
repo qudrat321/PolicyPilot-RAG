@@ -8,6 +8,7 @@ from app.services.guardrails import (
     is_refusal_required,
     validate_and_clean_citations,
     REFUSAL_MESSAGE,
+    get_refusal_message,
 )
 
 GENERATION_MODEL = "gemini-3.1-flash-lite"
@@ -58,14 +59,92 @@ def build_context_envelope(chunks: List[Dict[str, Any]]) -> str:
     return "\n\n".join(blocks)
 
 
+def is_translation_or_reformat_request(question: str) -> bool:
+    """Detect if question is asking to translate or reformat previous answer."""
+    q = question.strip().lower()
+    triggers = [
+        "above in urdu", "above in roman urdu", "convert to urdu", "translate to urdu",
+        "translate in urdu", "in urdu", "in roman urdu", "urdu mein", "urdu me",
+        "roman urdu", "isko urdu", "ye urdu", "convert above", "translate above",
+        "above to urdu", "above response in urdu", "explain above", "summarize above",
+        "above in table", "put this in table", "convert this to table", "convert to table",
+        "in table", "table form", "table format"
+    ]
+    for t in triggers:
+        if t in q:
+            return True
+    if q in ["in urdu", "urdu", "roman urdu", "اردو میں", "اردو", "urdu please", "urdu translation"]:
+        return True
+    if "اردو میں" in question or "اوپر والا" in question or "ترجمہ" in question:
+        return True
+    return False
+
+
+def translate_or_reformat_previous_answer(
+    instruction: str,
+    previous_answer: str,
+    previous_chunks: List[Dict[str, Any]],
+) -> Tuple[str, List[Citation], bool]:
+    """Translate or reformat a previously verified grounded answer while strictly preserving citations."""
+    client = get_genai_client()
+
+    prompt = f"""You are PolicyPilot, an enterprise public policy assistant.
+The user is requesting to translate, convert, or reformat the preceding verified policy answer.
+
+User Instruction:
+{instruction}
+
+Preceding Verified Grounded Answer:
+{previous_answer}
+
+STRICT CONVERSION & GROUNDING RULES:
+1. SCRIPT & LANGUAGE ACCURACY:
+   - If the user asks for Urdu (e.g. 'above in urdu', 'translate to urdu', 'urdu mein batao', 'اردو میں'), translate the answer accurately into formal, natural Urdu (اردو) script.
+   - If the user asks for Roman Urdu (e.g. 'in roman urdu', 'roman urdu mein'), translate into natural conversational Roman Urdu.
+   - If the user asks for a table or matrix (e.g. 'in table form', 'convert to table'), reformat the data into a clean Markdown table.
+2. PRESERVE CITATIONS: You MUST retain every bracketed citation tag (e.g. [1], [2], [3]) exactly where each factual claim or figure appears.
+3. NEVER extrapolate, add external assumptions, or remove verified facts.
+4. Output ONLY the translated/reformatted grounded answer."""
+
+    try:
+        response = client.models.generate_content(
+            model=GENERATION_MODEL,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_INSTRUCTION,
+                temperature=0.1,
+                max_output_tokens=700,
+            ),
+        )
+    except Exception:
+        try:
+            response = client.models.generate_content(
+                model=FALLBACK_MODEL,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=SYSTEM_INSTRUCTION,
+                    temperature=0.1,
+                    max_output_tokens=700,
+                ),
+            )
+        except Exception as e:
+            return f"Error: {str(e)}", [], True
+
+    raw_answer = response.text.strip() if response.text else previous_answer
+    clean_answer, citations = validate_and_clean_citations(raw_answer, previous_chunks)
+    return clean_answer, citations, False
+
+
 def generate_grounded_answer(
     question: str,
     chunks: List[Dict[str, Any]],
 ) -> Tuple[str, List[Citation], bool]:
     """Generate a strictly grounded answer with citations or return deterministic refusal."""
+    refusal_text = get_refusal_message(question)
+
     # Gate 1: Pre-LLM Deterministic Refusal (Spends 0 LLM Tokens)
     if is_refusal_required(chunks):
-        return REFUSAL_MESSAGE, [], True
+        return refusal_text, [], True
 
     # Gate 2: Format Grounded Context Envelope
     context_text = build_context_envelope(chunks)
@@ -97,7 +176,7 @@ def generate_grounded_answer(
         except Exception as e:
             return f"Error connecting to AI service: {str(e)}", [], True
 
-    raw_answer = response.text.strip() if response.text else REFUSAL_MESSAGE
+    raw_answer = response.text.strip() if response.text else refusal_text
 
     # Gate 3: Post-LLM Citation Cross-Validation
     clean_answer, citations = validate_and_clean_citations(raw_answer, chunks)
@@ -106,7 +185,8 @@ def generate_grounded_answer(
     if not citations and (
         raw_answer.strip().rstrip(".") == REFUSAL_MESSAGE.rstrip(".")
         or "not contain sufficient information" in raw_answer.lower()
+        or raw_answer.strip() == refusal_text.strip()
     ):
-        return REFUSAL_MESSAGE, [], True
+        return refusal_text, [], True
 
     return clean_answer, citations, False

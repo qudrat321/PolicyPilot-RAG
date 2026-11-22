@@ -10,12 +10,21 @@
 
 - **💸 100% Zero-Cost Cloud Architecture**: Runs completely on generous free tiers (Vercel, Render, Qdrant Cloud Free, Google AI Studio) with **$0 cloud bill**.
 - **🛡️ Zero Hallucinations & Strict Grounding**:
-  - **Deterministic Refusal**: If chunk similarity score falls below `0.65`, the system immediately refuses to answer without wasting LLM tokens.
+  - **Deterministic Refusal**: If chunk similarity score falls below `0.58`, the system immediately refuses to answer without wasting LLM tokens.
+  - **Multilingual Guardrails**: Provides grounded refusals in English, native Urdu script, and Roman Urdu matching the user's language.
   - **Citation Verification**: Every fact cites an exact chunk ID `[1]`, `[2]`. The system programmatically checks citations against retrieved IDs before responding.
   - **Data/Instruction Separation**: Treats document text strictly as inert data to defend against prompt injection.
-- **📊 Tabular & Multi-Sheet Excel Mastery**: Native streaming extraction for CSV and multi-sheet `.xlsx` files using `openpyxl` with header-preserving Markdown chunking.
-- **⚡ 512MB RAM Friendly**: Eliminates heavy PyTorch (`sentence-transformers`) in favor of Google `text-embedding-004`, keeping container RAM $< 120\text{ MB}$.
-- **🎨 High-Quality Frontend**: React + Vite + Tailwind CSS featuring instant cold-start warm-up banner, live citation popups, and a retrieved-chunk transparency inspector with similarity scores.
+- **📊 Tabular & Multi-Sheet Excel Mastery**:
+  - Native streaming extraction for CSV and multi-sheet `.xlsx` files using `openpyxl` with header-preserving Markdown chunking.
+  - Interactive **Raw CSV vs. Grid View** toggle directly inside assistant answers.
+- **💾 Enterprise Multi-Format Export**:
+  - **Export CSV & Formatted Excel (.xlsx)**: One-click export including an automated 2-line executive summary preamble and verification metadata.
+  - **Branded Enterprise PDF Report**: Generates formatted PDF compliance documents with executive headers, policy findings, and full citation audit trails.
+- **🌐 Conversational Intelligence & Multilingual Follow-ups**:
+  - Full multi-turn conversation memory with support for dynamic translation/reformat requests (e.g. *"above in urdu"*, *"summarize in Roman Urdu"*, *"convert to bullet points"*) without false retrieval rejections.
+- **🌓 Dual-Theme Interface (Dark & High-Contrast Normal Mode)**:
+  - WCAG AA compliant contrast with class-based Tailwind theming, custom scrollbars, and high-visibility cards.
+- **⚡ 512MB RAM Friendly**: Eliminates heavy PyTorch (`sentence-transformers`) in favor of Google `text-embedding-004` / `gemini-embedding-001`, keeping container RAM $< 120\text{ MB}$.
 
 ---
 
@@ -213,9 +222,22 @@ uvicorn app.main:app --reload --port 8000
 ```
 Interactive Swagger API documentation will be available at: `http://localhost:8000/docs`.
 
+### 4. Run Frontend User Interface
+```bash
+cd frontend
+npm install
+npm run dev
+```
+Open `http://localhost:5173` in your browser.
+
+To produce a production build:
+```bash
+npm run build --prefix frontend
+```
+
 ---
 
-## 🚦 Current Progress & Next Move
+## 🚦 Current Progress & Milestone Verification
 
 | Milestone | Status | Description |
 |---|---|---|
@@ -225,6 +247,8 @@ Interactive Swagger API documentation will be available at: `http://localhost:80
 | **Move 3: Retrieval & Grounding** | ✅ Completed | Strict citation cross-validator & deterministic refusal (3/3 passed) |
 | **Move 4: Golden Evaluation** | ✅ Completed | 25-question golden benchmark: Hit@3: 100%, MRR: 1.0, Refusal Accuracy: 100% |
 | **Move 5: FastAPI REST APIs** | ✅ Completed | Upload, list, delete, ask, and health endpoints (3/3 passed) |
-| **Move 6: React Frontend** | ✅ Completed | Complete UI with cold-start status probe & render.yaml deployment config |
+| **Move 6: React Frontend & Dual Theme** | ✅ Completed | Dark & high-contrast Normal mode, cold-start status probe & render.yaml |
+| **Move 7: Data Intelligence & Export** | ✅ Completed | Interactive CSV grid/raw view, formatted Excel (.xlsx) export, and branded PDF generation |
+| **Move 8: Conversational Multilingual** | ✅ Completed | History-aware translations/reformulations (Urdu, Roman Urdu, English) with zero false refusals |
 
-**Current Status**: All 6 moves completed and verified! Total test suite: **16/16 tests passing**. Ready for public showcase and deployment.
+**Current Status**: All milestones completed and verified! Total test suite: **16/16 tests passing**. Production build verified and deployed.

@@ -33,7 +33,7 @@
 Explore PolicyPilot RAG's grounded workflow, transparent citations, and executive compliance reporting:
 
 ### 1. Central Knowledge Base & Query Dashboard
-**Image Source**: [`./docs/assets/main_dasboard.png`](./docs/assets/main_dasboard.png)
+
 
 <p align="center">
   <img src="./docs/assets/main_dasboard.png" alt="PolicyPilot Central Dashboard" width="100%"/>
@@ -44,7 +44,6 @@ Explore PolicyPilot RAG's grounded workflow, transparent citations, and executiv
 ---
 
 ### 2. Multi-Document Grounded Q&A with Live Citations
-**Image Source**: [`./docs/assets/response_screen.jpg`](./docs/assets/response_screen.jpg)
 
 <p align="center">
   <img src="./docs/assets/response_screen.jpg" alt="Policy Comparison and Citation Matrix" width="100%"/>
@@ -55,7 +54,7 @@ Explore PolicyPilot RAG's grounded workflow, transparent citations, and executiv
 ---
 
 ### 3. Boardroom-Ready Executive PDF Compliance Report
-**Image Source**: [`./docs/assets/pdf_export.jpg`](./docs/assets/pdf_export.jpg)
+
 
 <p align="center">
   <img src="./docs/assets/pdf_export.jpg" alt="Executive PDF Compliance Report" width="85%"/>

@@ -43,15 +43,15 @@ flowchart TD
     end
 
     subgraph Retrieval [Retrieval & Grounding Engine]
-        RET[Top-k Hybrid Vector Retrieval]
-        DET[Deterministic Refusal Threshold\nScore < 0.65 = 0 Token Refusal]
-        VAL[Citation Cross-Validator]
+        RET["Top-k Hybrid Vector Retrieval"]
+        DET["🛡️ Gate 1: Deterministic Refusal Threshold<br/>Score < 0.58 = 0 Token Refusal"]
+        VAL["🛡️ Gate 3: Citation Cross-Validator"]
     end
 
     subgraph CloudServices [Free Cloud Infrastructure]
-        QD[(Qdrant Cloud Free\nVector + Text Payload Storage)]
-        GEM_EMB[Google text-embedding-004\n768-dim Embeddings]
-        GEM_LLM[Gemini 1.5 / 2.0 Flash\nStructured Grounded Answers]
+        QD[("Qdrant Cloud Free<br/>Vector + Text Payload Storage")]
+        GEM_EMB["Google gemini-embedding-001<br/>768-dim Embeddings"]
+        GEM_LLM["Gemini 3.1 Flash Lite<br/>🛡️ Gate 2: Strict Grounding Contract"]
     end
 
     UI -->|REST API| API
@@ -65,8 +65,8 @@ flowchart TD
     RET -->|Query Vector| GEM_EMB
     RET -->|Cosine Similarity| QD
     QD -->|Top-k Chunks & Scores| DET
-    DET -->|Score >= 0.65| GEM_LLM
-    DET -->|Score < 0.65| VAL
+    DET -->|Score >= 0.58| GEM_LLM
+    DET -->|Score < 0.58| VAL
     GEM_LLM --> VAL
     VAL -->|Structured Answer + Verified Citations| INSP
 ```
@@ -79,36 +79,36 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    Start([User Uploads Document]) --> Hash[Calculate SHA-256 & Validate Format/Size]
-    Hash -->|Duplicate Found| Reject409[Return HTTP 409 Conflict]
-    Hash -->|Valid & Unique| Extract{Detect File Type}
+    Start([User Uploads Document]) --> Hash["Calculate SHA-256 & Validate Format/Size"]
+    Hash -->|Duplicate Found| FastReUse["Reuse Existing Qdrant Vectors (0 Tokens)"]
+    Hash -->|Valid & New| Extract{"Detect File Type"}
 
-    Extract -->|PDF / DOCX / PPTX / HTML| TextExt[Extract with Page/Section Metadata]
-    Extract -->|CSV / Multi-Sheet XLSX| TableExt[Stream Rows & Prepend Headers via openpyxl]
+    Extract -->|PDF / DOCX / PPTX / HTML| TextExt["Extract with Page/Section Metadata"]
+    Extract -->|CSV / Multi-Sheet XLSX| TableExt["Stream Rows & Prepend Headers via openpyxl"]
 
-    TextExt --> Chunk[Sliding Window Text Chunker]
-    TableExt --> TableChunk[Header-Preserving Markdown Chunker\n+ Sheet Overview Summary]
+    TextExt --> Chunk["Sliding Window Text Chunker"]
+    TableExt --> TableChunk["Header-Preserving Markdown Chunker<br/>+ Workbook Overview Summary"]
 
-    Chunk & TableChunk --> EmbedBatch[Batch Embed via text-embedding-004]
-    EmbedBatch --> UpsertQdrant[(Upsert to Qdrant Cloud with Full Text in Payload)]
+    Chunk & TableChunk --> EmbedBatch["Batch Embed via gemini-embedding-001 (768-dim)"]
+    EmbedBatch --> UpsertQdrant[("Upsert to Qdrant Cloud with Full Text Payload")]
 
     UpsertQdrant --> Ready([Document Ready for Querying])
 
-    UserQuery([User Asks Policy Question]) --> EmbedQuery[Embed Query via text-embedding-004]
-    EmbedQuery --> VectorSearch[(Qdrant Top-k Similarity Search)]
-    VectorSearch --> CheckScore{Max Score >= 0.65?}
+    UserQuery([User Asks Policy Question]) --> EmbedQuery["Embed Query via gemini-embedding-001"]
+    EmbedQuery --> VectorSearch[("Qdrant Top-k Cosine Search")]
+    VectorSearch --> Gate1{"🛡️ Gate 1 Guardrail:<br/>Max Cosine Score >= 0.58?"}
 
-    CheckScore -->|No| QuickRefuse[Deterministic Refusal: 0 Tokens Spent\n'Information not found in documents']
-    CheckScore -->|Yes| PromptBuilder[Build Grounded Prompt with Chunks [1], [2], ...]
+    Gate1 -->|No| QuickRefuse["Deterministic Refusal (0 Tokens Spent)<br/>'Information not found in documents'"]
+    Gate1 -->|Yes| Gate2["🛡️ Gate 2 Guardrail:<br/>Build Grounded Prompt Envelope<br/>with Passages [1], [2]"]
     
-    PromptBuilder --> GeminiCall[Gemini 1.5/2.0 Flash Generation]
-    GeminiCall --> ValidateCitation{Are all cited IDs\nin retrieved chunks?}
+    Gate2 --> GeminiCall["Gemini 3.1 Flash Lite Generation"]
+    GeminiCall --> Gate3{"🛡️ Gate 3 Guardrail:<br/>Validate Citation Tags [X]<br/>against Retrieved Chunks"}
 
-    ValidateCitation -->|No| StripInvalid[Filter Fabricated Citations]
-    ValidateCitation -->|Yes| FormatResponse[Build Structured JSON Answer]
+    Gate3 -->|Fabricated Tags| StripInvalid["Filter & Strip Invalid Citation Tags"]
+    Gate3 -->|Verified Citations| FormatResponse["Format Grounded Answer + Citations"]
     StripInvalid --> FormatResponse
 
-    QuickRefuse & FormatResponse --> UIResponse([Deliver to React UI with Scores & Snippets])
+    QuickRefuse & FormatResponse --> UIResponse([Deliver to Multi-Turn React UI with Audit Inspector])
 ```
 
 ---
@@ -119,22 +119,32 @@ flowchart TD
 
 To prevent hallucinations, PolicyPilot applies a 3-layer verification firewall:
 
-1. **Pre-LLM Gate (Deterministic Refusal)**:
-   If the maximum cosine similarity score among retrieved chunks is below `0.65`, the system **does not call Gemini**. It immediately returns:
+1. **🛡️ Gate 1: Pre-LLM Deterministic Refusal**:
+   If the maximum cosine similarity score among retrieved chunks is below `0.58`, the system **does not call the LLM**. It immediately returns:
    > *"The provided documents do not contain sufficient information to answer this question."*  
    *Result: 100% reduction in hallucinated guesses on out-of-domain questions and 0 LLM tokens wasted.*
 
-2. **System Prompt Grounding Contract**:
+2. **🛡️ Gate 2: In-LLM Strict Grounding Contract**:
    ```text
-   You are PolicyPilot, an enterprise policy compliance assistant.
+   You are PolicyPilot, an enterprise public policy assistant.
    Answer the question ONLY using the factual context provided below.
    - Every claim must cite its source using bracketed numbers, e.g., [1] or [2].
-   - If the context does not explicitly state the answer, reply: "I cannot find this information in the provided policies."
+   - If the context does not explicitly state the answer, state what is specified and clarify missing details.
    - Do NOT extrapolate, speculate, or incorporate external knowledge.
    ```
 
-3. **Post-LLM Citation Cross-Validation**:
+3. **🛡️ Gate 3: Post-LLM Citation Cross-Validation**:
    The backend scans the generated response for citation tags `[i]`. It programmatically verifies that index `i` maps to a chunk actually provided in the context. Any hallucinated citation reference is stripped or flagged before reaching the UI.
+
+### 🛡️ Guardrail Code Implementation Matrix
+
+| Guardrail Layer | Purpose | Exact Code Location | Key Function / Variable |
+|---|---|---|---|
+| **Gate 1: Pre-LLM Guardrail** | Instant refusal for queries with cosine score < 0.58 (0 LLM tokens spent) | `backend/app/services/guardrails.py`<br/>`backend/app/services/generation.py` | `is_refusal_required(chunks, threshold=0.58)` |
+| **Gate 2: In-LLM Grounding** | Strictly enforces answer extraction solely from retrieved passages | `backend/app/services/generation.py` | `SYSTEM_INSTRUCTION`<br/>`build_context_envelope()` |
+| **Gate 3: Citation Validator** | Validates `[1]`, `[2]` tags against real chunks; strips fabricated references | `backend/app/services/guardrails.py` | `validate_and_clean_citations()` |
+| **Gate 4: Storage Quota Guard** | SHA-256 deduplication (0 tokens on re-upload) & LRU eviction for Qdrant | `backend/app/services/vector_store.py`<br/>`backend/app/ingestion/validation.py` | `find_document_by_hash()`<br/>`check_and_evict_lru()` |
+
 
 ---
 

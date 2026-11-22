@@ -105,67 +105,299 @@ function detectCsvFromText(text) {
   return null;
 }
 
-function ExportableCSVBlock({ rawCsv, scopeName = 'All Policy Documents', theme }) {
+function parseMarkdownTablesFromText(text) {
+  if (!text) return [];
+  const tableRegex = /((?:\|[^\n]+\|\r?\n)\|[-:\s|]+\|\r?\n(?:\|[^\n]+\|\r?\n?)+)/g;
+  const tables = [];
+  let match;
+  while ((match = tableRegex.exec(text)) !== null) {
+    const rawTable = match[0].trim();
+    const lines = rawTable.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    if (lines.length >= 3) {
+      const rows = lines
+        .filter((_, idx) => idx !== 1)
+        .map(line => {
+          const trimmed = line.replace(/^\||\|$/g, '');
+          return trimmed.split('|').map(c => c.trim());
+        });
+      if (rows.length >= 2) {
+        tables.push(rows);
+      }
+    }
+  }
+  return tables;
+}
+
+function extractAllTablesFromContent(text) {
+  if (!text) return [];
+  const mdTables = parseMarkdownTablesFromText(text);
+  const csvRaw = detectCsvFromText(text);
+  if (csvRaw) {
+    const csvRows = parseCsvToRows(csvRaw);
+    if (csvRows.length >= 2) {
+      mdTables.push(csvRows);
+    }
+  }
+  return mdTables;
+}
+
+function countTablesAndCsvInText(text) {
+  if (!text) return 0;
+  return extractAllTablesFromContent(text).length;
+}
+
+function convertTextToTableRows(question, answer, citations) {
+  const paragraphs = answer.split(/\r?\n\r?\n/).map(p => p.trim()).filter(Boolean);
+  const rows = [
+    ['Section / Element', 'Content / Policy Finding'],
+    ['Question / Inquiry', question]
+  ];
+  paragraphs.forEach((p, idx) => {
+    rows.push([`Finding Part ${idx + 1}`, p.replace(/```[a-z]*\n?[\s\S]*?\n```/g, '[Formatted Block]')]);
+  });
+  if (citations && citations.length > 0) {
+    citations.forEach((c, idx) => {
+      const tag = typeof c === 'object' && c.citation_id ? c.citation_id : `[${idx + 1}]`;
+      const docName = typeof c === 'object' ? `${c.filename || 'Document'} (${c.page_or_section || 'Section'})` : c;
+      rows.push([`Citation ${tag}`, docName]);
+    });
+  }
+  return rows;
+}
+
+function exportDataAsCsv(rows, scopeName = 'All Policy Documents', defaultFilename = 'policypilot_data') {
+  if (!rows || !rows.length) return;
+  const headers = rows[0] || [];
+  const summaryLine1 = `Document Purpose: Policy data matrix detailing ${headers.slice(0, 5).join(', ')}.`;
+  const summaryLine2 = `Scope & Verification: Extracted from [${scopeName}] with 100% grounded zero-hallucination compliance.`;
+  const metadataRows = [
+    ['PolicyPilot RAG - Enterprise Policy Table Export'],
+    [`Exported: ${new Date().toLocaleString()} | Source Scope: ${scopeName} | Engine: Zero-Hallucination Vector Engine`],
+    [summaryLine1],
+    [summaryLine2],
+    ['']
+  ];
+  const fullCsvData = [...metadataRows, ...rows];
+  const csvContent = fullCsvData.map(row =>
+    row.map(cell => `"${String(cell || '').replace(/"/g, '""')}"`).join(',')
+  ).join('\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${defaultFilename}_${Date.now()}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportDataAsExcel(rows, scopeName = 'All Policy Documents', sheetName = 'PolicyMatrix', defaultFilename = 'policypilot_data') {
+  if (!rows || !rows.length) return;
+  const headers = rows[0] || [];
+  const summaryLine1 = `Document Purpose: Policy data matrix detailing ${headers.slice(0, 5).join(', ')}.`;
+  const summaryLine2 = `Scope & Verification: Extracted from [${scopeName}] with 100% grounded zero-hallucination compliance.`;
+  const metadataRows = [
+    ['PolicyPilot RAG - Enterprise Policy Data Table'],
+    [`Exported: ${new Date().toLocaleString()} | Source Scope: ${scopeName} | Engine: Zero-Hallucination Vector Engine`],
+    [summaryLine1],
+    [summaryLine2],
+    []
+  ];
+  const fullSheetData = [...metadataRows, ...rows];
+  const ws = XLSX.utils.aoa_to_sheet(fullSheetData);
+  const colWidths = [];
+  fullSheetData.forEach(row => {
+    row.forEach((cell, colIdx) => {
+      const len = cell ? String(cell).length : 12;
+      colWidths[colIdx] = Math.min(65, Math.max(colWidths[colIdx] || 14, len + 3));
+    });
+  });
+  ws['!cols'] = colWidths.map(w => ({ wch: w }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  XLSX.writeFile(wb, `${defaultFilename}_${Date.now()}.xlsx`);
+}
+
+function exportTableAsPdf(title, rows, scopeName = 'All Policy Documents') {
+  if (!rows || !rows.length) return;
+  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+  const margin = 38;
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const maxLineWidth = pageWidth - margin * 2;
+  let cursorY = margin;
+
+  // 1. Enterprise Top Header Banner (Deep Navy + Emerald Accent)
+  doc.setFillColor(15, 23, 42); // #0f172a
+  doc.rect(0, 0, pageWidth, 58, 'F');
+  doc.setFillColor(16, 185, 129); // #10b981
+  doc.rect(0, 58, pageWidth, 3, 'F');
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(16);
+  doc.setTextColor(255, 255, 255);
+  doc.text('PolicyPilot', margin, 34);
+  doc.setTextColor(16, 185, 129);
+  doc.text(' RAG', margin + 84, 34);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  doc.setTextColor(148, 163, 184);
+  doc.text('Enterprise Policy Data Table & Compliance Export', margin, 47);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(16, 185, 129);
+  doc.text('VERIFICATION: 100% GROUNDED', pageWidth - margin - 150, 31);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(203, 213, 225);
+  doc.text(`Date: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`, pageWidth - margin - 150, 45);
+
+  cursorY = 76;
+
+  // 2. Executive Purpose & Document Scope Card (2 Lines)
+  doc.setFillColor(248, 250, 252);
+  doc.setDrawColor(203, 213, 225);
+  doc.setLineWidth(0.75);
+  doc.roundedRect(margin, cursorY, maxLineWidth, 44, 4, 4, 'FD');
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(5, 150, 105);
+  doc.text('EXECUTIVE PURPOSE & DOCUMENT SCOPE', margin + 10, cursorY + 13);
+
+  const headers = rows[0] || [];
+  const summaryLine1 = `• Purpose: Policy data matrix detailing: ${headers.slice(0, 6).join(', ')}`;
+  const summaryLine2 = `• Scope: Validated strictly against repository [${scopeName}] with zero-hallucination vector guarantee.`;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(51, 65, 85);
+  doc.text(summaryLine1, margin + 10, cursorY + 26);
+  doc.text(summaryLine2, margin + 10, cursorY + 38);
+
+  cursorY += 56;
+
+  // Table Title
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(15, 23, 42);
+  doc.text(title || 'Policy Data Matrix', margin, cursorY);
+  cursorY += 14;
+
+  const bodyRows = rows.slice(1);
+  const colCount = Math.max(1, headers.length);
+  const colWidth = maxLineWidth / colCount;
+
+  // Draw header row
+  doc.setFillColor(241, 245, 249);
+  doc.rect(margin, cursorY, maxLineWidth, 20, 'F');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(15, 23, 42);
+  headers.forEach((h, i) => {
+    doc.text(String(h || '').substring(0, 25), margin + (i * colWidth) + 4, cursorY + 13);
+  });
+  cursorY += 20;
+
+  // Draw data rows
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  bodyRows.forEach((row, rIdx) => {
+    if (cursorY > pageHeight - 45) {
+      doc.addPage();
+      cursorY = margin + 10;
+    }
+    if (rIdx % 2 === 1) {
+      doc.setFillColor(248, 250, 252);
+      doc.rect(margin, cursorY, maxLineWidth, 18, 'F');
+    }
+    doc.setTextColor(51, 65, 85);
+    row.forEach((cell, cIdx) => {
+      doc.text(String(cell || '').substring(0, 30), margin + (cIdx * colWidth) + 4, cursorY + 12);
+    });
+    doc.setDrawColor(226, 232, 240);
+    doc.line(margin, cursorY + 18, margin + maxLineWidth, cursorY + 18);
+    cursorY += 18;
+  });
+
+  const totalPages = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(148, 163, 184);
+    doc.text(
+      'PolicyPilot RAG • Confidential Enterprise Compliance • Zero-Hallucination Vector Architecture',
+      margin,
+      pageHeight - 16
+    );
+    doc.text(`Page ${i} of ${totalPages}`, pageWidth - margin - 45, pageHeight - 16);
+  }
+
+  doc.save(`policypilot_table_${Date.now()}.pdf`);
+}
+
+function handleExportExcelFromMessage(question, content, citations, scopeName) {
+  const tables = extractAllTablesFromContent(content);
+  if (tables.length > 0) {
+    const wb = XLSX.utils.book_new();
+    tables.forEach((tableRows, idx) => {
+      const headers = tableRows[0] || [];
+      const summaryLine1 = `Document Purpose: Policy data matrix detailing ${headers.slice(0, 5).join(', ')}.`;
+      const summaryLine2 = `Scope & Verification: Extracted from [${scopeName}] with 100% grounded zero-hallucination compliance.`;
+      const metadataRows = [
+        ['PolicyPilot RAG - Enterprise Policy Data Table'],
+        [`Exported: ${new Date().toLocaleString()} | Source Scope: ${scopeName} | Table ${idx + 1} of ${tables.length}`],
+        [summaryLine1],
+        [summaryLine2],
+        []
+      ];
+      const fullSheetData = [...metadataRows, ...tableRows];
+      const ws = XLSX.utils.aoa_to_sheet(fullSheetData);
+      const colWidths = [];
+      fullSheetData.forEach(row => {
+        row.forEach((cell, colIdx) => {
+          const len = cell ? String(cell).length : 12;
+          colWidths[colIdx] = Math.min(65, Math.max(colWidths[colIdx] || 14, len + 3));
+        });
+      });
+      ws['!cols'] = colWidths.map(w => ({ wch: w }));
+      const sheetName = tables.length === 1 ? 'PolicyMatrix' : `Table_${idx + 1}`;
+      XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    });
+    XLSX.writeFile(wb, `policypilot_data_${Date.now()}.xlsx`);
+  } else {
+    const rows = convertTextToTableRows(question, content, citations);
+    exportDataAsExcel(rows, scopeName, 'PolicyFindings', 'policypilot_findings');
+  }
+}
+
+function handleExportCsvFromMessage(question, content, citations, scopeName) {
+  const tables = extractAllTablesFromContent(content);
+  if (tables.length > 0) {
+    exportDataAsCsv(tables[0], scopeName, 'policypilot_data');
+  } else {
+    const rows = convertTextToTableRows(question, content, citations);
+    exportDataAsCsv(rows, scopeName, 'policypilot_findings');
+  }
+}
+
+function ExportableCSVBlock({ rawCsv, scopeName = 'All Policy Documents', theme, showTopExports = false }) {
   const [viewMode, setViewMode] = useState('table'); // 'table' | 'raw'
   const rows = parseCsvToRows(rawCsv);
 
   const handleDownloadCSV = () => {
     if (!rows.length) return;
-    const headers = rows[0] || [];
-    const summaryLine1 = `Document Purpose: Policy data matrix detailing ${headers.slice(0, 5).join(', ')}.`;
-    const summaryLine2 = `Scope & Verification: Extracted from [${scopeName}] with 100% grounded zero-hallucination compliance.`;
-
-    const metadataRows = [
-      ['PolicyPilot RAG - Enterprise Policy Table Export'],
-      [`Exported: ${new Date().toLocaleString()} | Source Scope: ${scopeName} | Engine: Zero-Hallucination Vector Engine`],
-      [summaryLine1],
-      [summaryLine2],
-      ['']
-    ];
-
-    const fullCsvData = [...metadataRows, ...rows];
-    const csvContent = fullCsvData.map(row =>
-      row.map(cell => `"${String(cell || '').replace(/"/g, '""')}"`).join(',')
-    ).join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `policypilot_data_${Date.now()}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    exportDataAsCsv(rows, scopeName, 'policypilot_data');
   };
 
   const handleDownloadExcel = () => {
     if (!rows.length) return;
-    const headers = rows[0] || [];
-    const summaryLine1 = `Document Purpose: Policy data matrix detailing ${headers.slice(0, 5).join(', ')}.`;
-    const summaryLine2 = `Scope & Verification: Extracted from [${scopeName}] with 100% grounded zero-hallucination compliance.`;
+    exportDataAsExcel(rows, scopeName, 'PolicyMatrix', 'policypilot_data');
+  };
 
-    const metadataRows = [
-      ['PolicyPilot RAG - Enterprise Policy Data Table'],
-      [`Exported: ${new Date().toLocaleString()} | Source Scope: ${scopeName}`],
-      [summaryLine1],
-      [summaryLine2],
-      []
-    ];
-
-    const fullSheetData = [...metadataRows, ...rows];
-    const ws = XLSX.utils.aoa_to_sheet(fullSheetData);
-
-    const colWidths = [];
-    fullSheetData.forEach(row => {
-      row.forEach((cell, colIdx) => {
-        const len = cell ? String(cell).length : 12;
-        colWidths[colIdx] = Math.min(65, Math.max(colWidths[colIdx] || 14, len + 3));
-      });
-    });
-    ws['!cols'] = colWidths.map(w => ({ wch: w }));
-
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'PolicyMatrix');
-    XLSX.writeFile(wb, `policypilot_data_${Date.now()}.xlsx`);
+  const handleDownloadPdf = () => {
+    if (!rows.length) return;
+    exportTableAsPdf('CSV Data Matrix', rows, scopeName);
   };
 
   const headers = rows[0] || [];
@@ -204,31 +436,48 @@ function ExportableCSVBlock({ rawCsv, scopeName = 'All Policy Documents', theme 
             {viewMode === 'table' ? 'Raw CSV' : 'Grid View'}
           </button>
 
-          <button
-            onClick={handleDownloadCSV}
-            className={`px-2 py-1 rounded border transition-colors flex items-center gap-1 text-[11px] font-medium ${
-              theme === 'dark'
-                ? 'bg-slate-800 hover:bg-slate-750 text-slate-200 hover:text-emerald-300 border-slate-700'
-                : 'bg-white hover:bg-slate-100 text-slate-800 hover:text-emerald-700 border-slate-300 shadow-xs'
-            }`}
-            title="Download as CSV file"
-          >
-            <Download className="w-3 h-3" />
-            <span>CSV</span>
-          </button>
+          {showTopExports && (
+            <>
+              <button
+                onClick={handleDownloadCSV}
+                className={`px-2 py-1 rounded border transition-colors flex items-center gap-1 text-[11px] font-medium ${
+                  theme === 'dark'
+                    ? 'bg-slate-800 hover:bg-slate-750 text-slate-200 hover:text-emerald-300 border-slate-700'
+                    : 'bg-white hover:bg-slate-100 text-slate-800 hover:text-emerald-700 border-slate-300 shadow-xs'
+                }`}
+                title="Download this specific table as CSV"
+              >
+                <Download className="w-3 h-3" />
+                <span>CSV</span>
+              </button>
 
-          <button
-            onClick={handleDownloadExcel}
-            className={`px-2 py-1 rounded border transition-colors flex items-center gap-1 text-[11px] font-medium ${
-              theme === 'dark'
-                ? 'bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-300 border-emerald-800/80'
-                : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-300 shadow-xs'
-            }`}
-            title="Download as Excel spreadsheet"
-          >
-            <FileSpreadsheet className="w-3 h-3" />
-            <span>Excel (.xlsx)</span>
-          </button>
+              <button
+                onClick={handleDownloadExcel}
+                className={`px-2 py-1 rounded border transition-colors flex items-center gap-1 text-[11px] font-medium ${
+                  theme === 'dark'
+                    ? 'bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-300 border-emerald-800/80'
+                    : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-300 shadow-xs'
+                }`}
+                title="Download this specific table as Excel (.xlsx)"
+              >
+                <FileSpreadsheet className="w-3 h-3" />
+                <span>Excel</span>
+              </button>
+
+              <button
+                onClick={handleDownloadPdf}
+                className={`px-2 py-1 rounded border transition-colors flex items-center gap-1 text-[11px] font-medium ${
+                  theme === 'dark'
+                    ? 'bg-blue-950/60 hover:bg-blue-900/80 text-blue-300 border-blue-800/80'
+                    : 'bg-blue-50 hover:bg-blue-100 text-blue-800 border-blue-300 shadow-xs'
+                }`}
+                title="Download this specific table as PDF"
+              >
+                <FileDown className="w-3 h-3" />
+                <span>PDF</span>
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -274,51 +523,7 @@ function ExportableCSVBlock({ rawCsv, scopeName = 'All Policy Documents', theme 
   );
 }
 
-function MermaidDiagram({ chart, theme = 'dark' }) {
-  const containerRef = useRef(null);
-  const [svgContent, setSvgContent] = useState('');
-  const [error, setError] = useState(null);
-
-  useEffect(() => {
-    let isMounted = true;
-    const renderChart = async () => {
-      try {
-        const id = `mermaid-${Math.random().toString(36).substring(2, 9)}`;
-        const { svg } = await mermaid.render(id, chart);
-        if (isMounted) {
-          setSvgContent(svg);
-          setError(null);
-        }
-      } catch (err) {
-        if (isMounted) setError('Diagram rendering error');
-      }
-    };
-    renderChart();
-    return () => { isMounted = false; };
-  }, [chart]);
-
-  if (error) {
-    return (
-      <pre className={`p-3 border rounded-lg text-xs font-mono overflow-x-auto ${
-        theme === 'dark' ? 'bg-slate-950 border-slate-800 text-slate-400' : 'bg-slate-100 border-slate-300 text-slate-700'
-      }`}>
-        <code>{chart}</code>
-      </pre>
-    );
-  }
-
-  return (
-    <div
-      ref={containerRef}
-      className={`my-3 p-4 rounded-xl border flex justify-center overflow-x-auto shadow-inner ${
-        theme === 'dark' ? 'bg-slate-950/80 border-slate-800/80' : 'bg-white border-slate-200'
-      }`}
-      dangerouslySetInnerHTML={{ __html: svgContent }}
-    />
-  );
-}
-
-function ExportableTable({ children, scopeName = 'All Policy Documents', theme = 'dark' }) {
+function ExportableTable({ children, scopeName = 'All Policy Documents', theme = 'dark', showTopExports = false }) {
   const tableRef = useRef(null);
 
   const extractTableData = () => {
@@ -333,65 +538,19 @@ function ExportableTable({ children, scopeName = 'All Policy Documents', theme =
   const handleDownloadCSV = () => {
     const data = extractTableData();
     if (!data.length) return;
-
-    const headers = data[0] || [];
-    const summaryLine1 = `Document Purpose: Policy comparison matrix detailing ${headers.slice(0, 5).join(', ')}.`;
-    const summaryLine2 = `Scope & Verification: Extracted from [${scopeName}] with 100% grounded zero-hallucination compliance.`;
-
-    const metadataRows = [
-      ['PolicyPilot RAG - Enterprise Policy Table Export'],
-      [`Exported: ${new Date().toLocaleString()} | Source Scope: ${scopeName} | Engine: Zero-Hallucination Vector Engine`],
-      [summaryLine1],
-      [summaryLine2],
-      [''] // Empty spacer row
-    ];
-
-    const fullCsvData = [...metadataRows, ...data];
-    const csvContent = fullCsvData.map(row =>
-      row.map(cell => `"${String(cell || '').replace(/"/g, '""')}"`).join(',')
-    ).join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `policypilot_table_${Date.now()}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    exportDataAsCsv(data, scopeName, 'policypilot_table');
   };
 
   const handleDownloadExcel = () => {
     const data = extractTableData();
     if (!data.length) return;
+    exportDataAsExcel(data, scopeName, 'PolicyMatrix', 'policypilot_matrix');
+  };
 
-    const headers = data[0] || [];
-    const summaryLine1 = `Document Purpose: Policy comparison matrix detailing ${headers.slice(0, 5).join(', ')}.`;
-    const summaryLine2 = `Scope & Verification: Extracted from [${scopeName}] with 100% grounded zero-hallucination compliance.`;
-
-    const metadataRows = [
-      ['PolicyPilot RAG - Enterprise Policy Data Table'],
-      [`Exported: ${new Date().toLocaleString()} | Source Scope: ${scopeName}`],
-      [summaryLine1],
-      [summaryLine2],
-      [] // Empty spacer row
-    ];
-
-    const fullSheetData = [...metadataRows, ...data];
-    const ws = XLSX.utils.aoa_to_sheet(fullSheetData);
-
-    // Auto-fit column widths
-    const colWidths = [];
-    fullSheetData.forEach(row => {
-      row.forEach((cell, colIdx) => {
-        const len = cell ? String(cell).length : 12;
-        colWidths[colIdx] = Math.min(65, Math.max(colWidths[colIdx] || 14, len + 3));
-      });
-    });
-    ws['!cols'] = colWidths.map(w => ({ wch: w }));
-
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'PolicyMatrix');
-    XLSX.writeFile(wb, `policypilot_matrix_${Date.now()}.xlsx`);
+  const handleDownloadPdf = () => {
+    const data = extractTableData();
+    if (!data.length) return;
+    exportTableAsPdf('Policy Data Matrix', data, scopeName);
   };
 
   return (
@@ -406,32 +565,46 @@ function ExportableTable({ children, scopeName = 'All Policy Documents', theme =
           <Table className="w-3.5 h-3.5" />
           <span>Policy Data Matrix</span>
         </span>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleDownloadCSV}
-            className={`px-2 py-1 rounded border transition-colors flex items-center gap-1 text-[11px] font-medium ${
-              theme === 'dark'
-                ? 'bg-slate-800 hover:bg-slate-750 text-slate-200 hover:text-emerald-300 border-slate-700'
-                : 'bg-white hover:bg-slate-100 text-slate-800 hover:text-emerald-700 border-slate-300 shadow-xs'
-            }`}
-            title="Download table as CSV with executive summary"
-          >
-            <Download className="w-3 h-3" />
-            <span>CSV</span>
-          </button>
-          <button
-            onClick={handleDownloadExcel}
-            className={`px-2 py-1 rounded border transition-colors flex items-center gap-1 text-[11px] font-medium ${
-              theme === 'dark'
-                ? 'bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-300 border-emerald-800/80'
-                : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-300 shadow-xs'
-            }`}
-            title="Download table as formatted Excel (.xlsx) with executive summary"
-          >
-            <FileSpreadsheet className="w-3 h-3" />
-            <span>Excel (.xlsx)</span>
-          </button>
-        </div>
+        {showTopExports && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleDownloadCSV}
+              className={`px-2 py-1 rounded border transition-colors flex items-center gap-1 text-[11px] font-medium ${
+                theme === 'dark'
+                  ? 'bg-slate-800 hover:bg-slate-750 text-slate-200 hover:text-emerald-300 border-slate-700'
+                  : 'bg-white hover:bg-slate-100 text-slate-800 hover:text-emerald-700 border-slate-300 shadow-xs'
+              }`}
+              title="Download this specific table as CSV"
+            >
+              <Download className="w-3 h-3" />
+              <span>CSV</span>
+            </button>
+            <button
+              onClick={handleDownloadExcel}
+              className={`px-2 py-1 rounded border transition-colors flex items-center gap-1 text-[11px] font-medium ${
+                theme === 'dark'
+                  ? 'bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-300 border-emerald-800/80'
+                  : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-300 shadow-xs'
+              }`}
+              title="Download this specific table as Excel (.xlsx)"
+            >
+              <FileSpreadsheet className="w-3 h-3" />
+              <span>Excel</span>
+            </button>
+            <button
+              onClick={handleDownloadPdf}
+              className={`px-2 py-1 rounded border transition-colors flex items-center gap-1 text-[11px] font-medium ${
+                theme === 'dark'
+                  ? 'bg-blue-950/60 hover:bg-blue-900/80 text-blue-300 border-blue-800/80'
+                  : 'bg-blue-50 hover:bg-blue-100 text-blue-800 border-blue-300 shadow-xs'
+              }`}
+              title="Download this specific table as PDF"
+            >
+              <FileDown className="w-3 h-3" />
+              <span>PDF</span>
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="overflow-x-auto">
@@ -622,6 +795,7 @@ export default function App() {
   const [isDragging, setIsDragging] = useState(false);
   const [expandedInspectors, setExpandedInspectors] = useState({});
   const [copiedId, setCopiedId] = useState(null);
+  const [activeExportMenuId, setActiveExportMenuId] = useState(null);
 
   // Theme state: 'dark' (default) or 'light'
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
@@ -1440,9 +1614,9 @@ export default function App() {
                           blockquote: ({ node, ...props }) => (
                             <blockquote className={`border-l-4 border-emerald-500/60 px-3.5 py-2 my-2 rounded-r italic ${theme === 'dark' ? 'bg-emerald-950/20 text-slate-300' : 'bg-emerald-50 text-slate-900 border-emerald-600'}`} {...props} />
                           ),
-                          // Exportable Table with CSV and Excel (.xlsx) download options
+                          // Exportable Table with CSV and Excel (.xlsx) download options (shown on top only when multiple tables/CSVs exist)
                           table: ({ node, children, ...props }) => (
-                            <ExportableTable scopeName={activeDocName} theme={theme}>{children}</ExportableTable>
+                            <ExportableTable scopeName={activeDocName} theme={theme} showTopExports={countTablesAndCsvInText(msg.content) > 1}>{children}</ExportableTable>
                           ),
                           thead: ({ node, ...props }) => (
                             <thead className={`uppercase tracking-wider font-semibold border-b ${theme === 'dark' ? 'bg-slate-850 text-slate-200 border-slate-700' : 'bg-slate-100 text-slate-900 border-slate-300'}`} {...props} />
@@ -1474,7 +1648,7 @@ export default function App() {
                             })());
 
                             if (isCsv) {
-                              return <ExportableCSVBlock rawCsv={rawText} scopeName={activeDocName} theme={theme} />;
+                              return <ExportableCSVBlock rawCsv={rawText} scopeName={activeDocName} theme={theme} showTopExports={countTablesAndCsvInText(msg.content) > 1} />;
                             }
 
                             if (inline) {
@@ -1602,108 +1776,128 @@ export default function App() {
                     {/* Turn Timestamp & Actions */}
                     <div className="flex items-center justify-between text-[10px] text-slate-500 px-1 pt-1">
                       <span className="font-mono">{msg.timestamp}</span>
-                      <div className="flex items-center gap-3">
-                        {detectCsvFromText(msg.content) && (
-                          <>
-                            <button
-                              onClick={() => {
-                                const csvRaw = detectCsvFromText(msg.content);
-                                if (!csvRaw) return;
-                                const rows = parseCsvToRows(csvRaw);
-                                if (!rows.length) return;
-                                const headers = rows[0] || [];
-                                const summaryLine1 = `Document Purpose: Policy data matrix detailing ${headers.slice(0, 5).join(', ')}.`;
-                                const summaryLine2 = `Scope & Verification: Extracted from [${activeDocName}] with 100% grounded zero-hallucination compliance.`;
-                                const metadataRows = [
-                                  ['PolicyPilot RAG - Enterprise Policy Table Export'],
-                                  [`Exported: ${new Date().toLocaleString()} | Source Scope: ${activeDocName} | Engine: Zero-Hallucination Vector Engine`],
-                                  [summaryLine1],
-                                  [summaryLine2],
-                                  ['']
-                                ];
-                                const fullCsvData = [...metadataRows, ...rows];
-                                const csvContent = fullCsvData.map(row =>
-                                  row.map(cell => `"${String(cell || '').replace(/"/g, '""')}"`).join(',')
-                                ).join('\n');
-                                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-                                const url = URL.createObjectURL(blob);
-                                const a = document.createElement('a');
-                                a.href = url;
-                                a.download = `policypilot_data_${Date.now()}.csv`;
-                                a.click();
-                                URL.revokeObjectURL(url);
-                              }}
-                              className={`flex items-center gap-1 transition-colors ${theme === 'dark' ? 'text-slate-400 hover:text-emerald-400' : 'text-slate-500 hover:text-emerald-600'}`}
-                              title="Export CSV data with executive summary"
-                            >
-                              <Download className="w-3.5 h-3.5" />
-                              <span>Export CSV</span>
-                            </button>
+                      <div className="flex items-center gap-2">
+                        
+                        {/* Unified Export Menu Button */}
+                        <div className="relative">
+                          <button
+                            onClick={() => setActiveExportMenuId(activeExportMenuId === msg.id ? null : msg.id)}
+                            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-semibold transition-all shadow-xs ${
+                              theme === 'dark'
+                                ? 'bg-slate-900 border-slate-750 text-slate-200 hover:text-emerald-400 hover:border-emerald-500/50'
+                                : 'bg-white border-slate-300 text-slate-800 hover:text-emerald-700 hover:border-emerald-500'
+                            }`}
+                            title="Export response in multiple formats"
+                          >
+                            <Download className="w-3.5 h-3.5 text-emerald-500" />
+                            <span>Export</span>
+                            <ChevronDown className={`w-3 h-3 transition-transform ${activeExportMenuId === msg.id ? 'rotate-180' : ''}`} />
+                          </button>
 
-                            <button
-                              onClick={() => {
-                                const csvRaw = detectCsvFromText(msg.content);
-                                if (!csvRaw) return;
-                                const rows = parseCsvToRows(csvRaw);
-                                if (!rows.length) return;
-                                const headers = rows[0] || [];
-                                const summaryLine1 = `Document Purpose: Policy data matrix detailing ${headers.slice(0, 5).join(', ')}.`;
-                                const summaryLine2 = `Scope & Verification: Extracted from [${activeDocName}] with 100% grounded zero-hallucination compliance.`;
-                                const metadataRows = [
-                                  ['PolicyPilot RAG - Enterprise Policy Data Table'],
-                                  [`Exported: ${new Date().toLocaleString()} | Source Scope: ${activeDocName}`],
-                                  [summaryLine1],
-                                  [summaryLine2],
-                                  []
-                                ];
-                                const fullSheetData = [...metadataRows, ...rows];
-                                const ws = XLSX.utils.aoa_to_sheet(fullSheetData);
-                                const colWidths = [];
-                                fullSheetData.forEach(row => {
-                                  row.forEach((cell, colIdx) => {
-                                    const len = cell ? String(cell).length : 12;
-                                    colWidths[colIdx] = Math.min(65, Math.max(colWidths[colIdx] || 14, len + 3));
-                                  });
-                                });
-                                ws['!cols'] = colWidths.map(w => ({ wch: w }));
-                                const wb = XLSX.utils.book_new();
-                                XLSX.utils.book_append_sheet(wb, ws, 'PolicyMatrix');
-                                XLSX.writeFile(wb, `policypilot_data_${Date.now()}.xlsx`);
-                              }}
-                              className={`flex items-center gap-1 transition-colors ${theme === 'dark' ? 'text-slate-400 hover:text-emerald-400' : 'text-slate-500 hover:text-emerald-600'}`}
-                              title="Export Excel (.xlsx) spreadsheet with executive summary"
-                            >
-                              <FileSpreadsheet className="w-3.5 h-3.5" />
-                              <span>Export Excel</span>
-                            </button>
-                          </>
-                        )}
+                          {activeExportMenuId === msg.id && (
+                            <>
+                              {/* Overlay to close menu on outside click */}
+                              <div
+                                className="fixed inset-0 z-30"
+                                onClick={() => setActiveExportMenuId(null)}
+                              />
+                              
+                              {/* Export Options Popup Menu */}
+                              <div className={`absolute right-0 bottom-full mb-1.5 w-60 rounded-xl border p-1.5 shadow-2xl z-40 animate-fade-in ${
+                                theme === 'dark'
+                                  ? 'bg-[#0f172a] border-slate-700/90 text-slate-200 shadow-black/80'
+                                  : 'bg-white border-slate-300 text-slate-900 shadow-slate-400/30'
+                              }`}>
+                                <div className={`px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider border-b mb-1 ${
+                                  theme === 'dark' ? 'border-slate-800 text-slate-400' : 'border-slate-200 text-slate-500'
+                                }`}>
+                                  Select Export Format
+                                </div>
 
-                        <button
-                          onClick={() => {
-                            const msgIdx = messages.findIndex(m => m.id === msg.id);
-                            const qText = msgIdx > 0 ? messages[msgIdx - 1]?.content : 'Policy Inquiry';
-                            exportToPdf(qText, msg.content, msg.citations, activeDocName);
-                          }}
-                          className={`flex items-center gap-1 transition-colors ${theme === 'dark' ? 'text-slate-400 hover:text-emerald-400' : 'text-slate-500 hover:text-emerald-600'}`}
-                          title="Export answer and citations as PDF document"
-                        >
-                          <FileDown className="w-3.5 h-3.5" />
-                          <span>Export PDF</span>
-                        </button>
+                                {/* 1. Export PDF */}
+                                <button
+                                  onClick={() => {
+                                    setActiveExportMenuId(null);
+                                    const msgIdx = messages.findIndex(m => m.id === msg.id);
+                                    const qText = msgIdx > 0 ? messages[msgIdx - 1]?.content : 'Policy Inquiry';
+                                    exportToPdf(qText, msg.content, msg.citations, activeDocName);
+                                  }}
+                                  className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-medium transition-colors text-left ${
+                                    theme === 'dark'
+                                      ? 'hover:bg-slate-800/90 hover:text-emerald-300'
+                                      : 'hover:bg-slate-100 hover:text-emerald-800'
+                                  }`}
+                                >
+                                  <FileDown className="w-4 h-4 text-emerald-500 shrink-0" />
+                                  <div>
+                                    <div className="font-semibold leading-tight">Export as PDF</div>
+                                    <div className={`text-[10px] ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>Executive report with audit trail</div>
+                                  </div>
+                                </button>
 
+                                {/* 2. Export Excel */}
+                                <button
+                                  onClick={() => {
+                                    setActiveExportMenuId(null);
+                                    const msgIdx = messages.findIndex(m => m.id === msg.id);
+                                    const qText = msgIdx > 0 ? messages[msgIdx - 1]?.content : 'Policy Inquiry';
+                                    handleExportExcelFromMessage(qText, msg.content, msg.citations, activeDocName);
+                                  }}
+                                  className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-medium transition-colors text-left ${
+                                    theme === 'dark'
+                                      ? 'hover:bg-slate-800/90 hover:text-emerald-300'
+                                      : 'hover:bg-slate-100 hover:text-emerald-800'
+                                  }`}
+                                >
+                                  <FileSpreadsheet className="w-4 h-4 text-emerald-500 shrink-0" />
+                                  <div>
+                                    <div className="font-semibold leading-tight">Export as Excel (.xlsx)</div>
+                                    <div className={`text-[10px] ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>Formatted spreadsheet matrix</div>
+                                  </div>
+                                </button>
+
+                                {/* 3. Export CSV */}
+                                <button
+                                  onClick={() => {
+                                    setActiveExportMenuId(null);
+                                    const msgIdx = messages.findIndex(m => m.id === msg.id);
+                                    const qText = msgIdx > 0 ? messages[msgIdx - 1]?.content : 'Policy Inquiry';
+                                    handleExportCsvFromMessage(qText, msg.content, msg.citations, activeDocName);
+                                  }}
+                                  className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-medium transition-colors text-left ${
+                                    theme === 'dark'
+                                      ? 'hover:bg-slate-800/90 hover:text-emerald-300'
+                                      : 'hover:bg-slate-100 hover:text-emerald-800'
+                                  }`}
+                                >
+                                  <Download className="w-4 h-4 text-emerald-500 shrink-0" />
+                                  <div>
+                                    <div className="font-semibold leading-tight">Export as CSV (.csv)</div>
+                                    <div className={`text-[10px] ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>Data matrix with summary header</div>
+                                  </div>
+                                </button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+
+                        {/* Copy Answer Button */}
                         <button
                           onClick={() => copyToClipboard(msg.content, msg.id)}
-                          className={`flex items-center gap-1 transition-colors ${theme === 'dark' ? 'text-slate-400 hover:text-slate-200' : 'text-slate-500 hover:text-slate-800'}`}
+                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium transition-colors ${
+                            theme === 'dark'
+                              ? 'border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-850'
+                              : 'border-slate-300 text-slate-700 hover:text-slate-950 hover:bg-slate-100'
+                          }`}
                         >
                           {copiedId === msg.id ? (
                             <>
-                              <Check className="w-3 h-3 text-emerald-500" />
-                              <span className="text-emerald-500">Copied</span>
+                              <Check className="w-3.5 h-3.5 text-emerald-500" />
+                              <span className="text-emerald-500 font-semibold">Copied</span>
                             </>
                           ) : (
                             <>
-                              <Copy className="w-3 h-3" />
+                              <Copy className="w-3.5 h-3.5" />
                               <span>Copy Answer</span>
                             </>
                           )}

@@ -966,7 +966,7 @@ export default function App() {
     : documents.find(d => d.doc_id === selectedDocId)?.filename || 'Selected Policy';
 
   return (
-    <div className={`flex h-screen font-sans antialiased overflow-hidden ${theme === 'dark' ? 'bg-[#07090e] text-slate-100' : 'bg-slate-100 text-slate-800'}`}>
+    <div className={`flex h-screen font-sans antialiased overflow-hidden ${theme === 'dark' ? 'bg-[#07090e] text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
       
       {/* Hidden File Input */}
       <input
@@ -981,22 +981,22 @@ export default function App() {
       <aside
         className={`flex flex-col transition-all duration-300 z-20 ${
           sidebarOpen ? 'w-80 min-w-[20rem]' : 'w-0 -translate-x-full border-r-0 overflow-hidden'
-        } ${theme === 'dark' ? 'border-r border-slate-800/80 bg-[#0b0f19]' : 'border-r border-slate-200 bg-white text-slate-800'}`}
+        } ${theme === 'dark' ? 'border-r border-slate-800/80 bg-[#0b0f19]' : 'border-r border-slate-250 bg-white text-slate-900 shadow-xs'}`}
       >
         {/* Sidebar Header */}
         <div className={`p-4 border-b flex items-center justify-between ${theme === 'dark' ? 'border-slate-800/80' : 'border-slate-200'}`}>
           <div className="flex items-center gap-2.5">
-            <div className="p-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
+            <div className={`p-1.5 rounded-lg border ${theme === 'dark' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-emerald-100 border-emerald-300 text-emerald-700'}`}>
               <Compass className="w-5 h-5" />
             </div>
             <div>
-              <h2 className={`font-semibold text-sm tracking-wide ${theme === 'dark' ? 'text-slate-100' : 'text-slate-800'}`}>Knowledge Base</h2>
-              <p className={`text-[11px] ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>Qdrant Cloud Vectors</p>
+              <h2 className={`font-bold text-sm tracking-wide ${theme === 'dark' ? 'text-slate-100' : 'text-slate-950'}`}>Knowledge Base</h2>
+              <p className={`text-[11px] font-medium ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>Qdrant Cloud Vectors</p>
             </div>
           </div>
           <button
             onClick={() => setSidebarOpen(false)}
-            className={`p-1 rounded transition-colors ${theme === 'dark' ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'}`}
+            className={`p-1 rounded transition-colors ${theme === 'dark' ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60' : 'text-slate-600 hover:text-slate-950 hover:bg-slate-100'}`}
             title="Collapse Sidebar"
           >
             <PanelLeftClose className="w-4 h-4" />
@@ -1015,14 +1015,14 @@ export default function App() {
                 ? 'border-emerald-500 bg-emerald-500/10 text-emerald-600'
                 : theme === 'dark'
                 ? 'border-slate-800 hover:border-slate-700 bg-slate-900/40 hover:bg-slate-900/80 text-slate-400'
-                : 'border-slate-300 hover:border-emerald-500 bg-slate-50 hover:bg-slate-100 text-slate-600'
+                : 'border-slate-300 hover:border-emerald-600 bg-slate-50/80 hover:bg-emerald-50/30 text-slate-700 shadow-xs'
             }`}
           >
-            <UploadCloud className={`w-6 h-6 mx-auto mb-1.5 ${theme === 'dark' ? 'text-slate-300' : 'text-slate-500'}`} />
-            <p className={`text-xs font-medium ${theme === 'dark' ? 'text-slate-200' : 'text-slate-700'}`}>
+            <UploadCloud className={`w-6 h-6 mx-auto mb-1.5 ${theme === 'dark' ? 'text-slate-300' : 'text-emerald-600'}`} />
+            <p className={`text-xs font-bold ${theme === 'dark' ? 'text-slate-200' : 'text-slate-950'}`}>
               {uploadLoading ? 'Indexing vectors...' : 'Drop or browse policy files'}
             </p>
-            <p className={`text-[10px] mt-1 ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>PDF, DOCX, XLSX, CSV, PPTX, HTML</p>
+            <p className={`text-[10px] mt-1 font-semibold ${theme === 'dark' ? 'text-slate-500' : 'text-slate-600'}`}>PDF, DOCX, XLSX, CSV, PPTX, HTML</p>
           </div>
 
           {/* Upload Status Banner */}
@@ -1046,34 +1046,34 @@ export default function App() {
 
         {/* Scope Selector: All Documents vs Specific */}
         <div className="px-4 pt-3 pb-1">
-          <div className={`flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider mb-2 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
+          <div className={`flex items-center justify-between text-[11px] font-bold uppercase tracking-wider mb-2 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-700'}`}>
             <span>Query Scope Filter</span>
-            <span className="text-emerald-500 font-mono text-[10px]">{documents.length} Indexed</span>
+            <span className={`font-mono text-[10px] font-bold ${theme === 'dark' ? 'text-emerald-500' : 'text-emerald-700'}`}>{documents.length} Indexed</span>
           </div>
           <button
             onClick={() => setSelectedDocId('all')}
-            className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium flex items-center justify-between transition-colors mb-1.5 ${
+            className={`w-full text-left px-3 py-2 rounded-lg text-xs font-semibold flex items-center justify-between transition-colors mb-1.5 ${
               selectedDocId === 'all'
                 ? theme === 'dark'
                   ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
-                  : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                  : 'bg-emerald-50 text-emerald-950 border-2 border-emerald-500/70 shadow-xs'
                 : theme === 'dark'
                 ? 'text-slate-300 hover:bg-slate-850 hover:text-white border border-transparent'
-                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-transparent'
+                : 'text-slate-800 hover:bg-slate-100 hover:text-slate-950 border border-slate-200'
             }`}
           >
             <div className="flex items-center gap-2">
               <Database className="w-3.5 h-3.5" />
               <span>Search Across All Documents</span>
             </div>
-            {selectedDocId === 'all' && <Check className="w-3.5 h-3.5 text-emerald-500" />}
+            {selectedDocId === 'all' && <Check className="w-3.5 h-3.5 text-emerald-600 font-bold" />}
           </button>
         </div>
 
         {/* Document List */}
         <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-1.5">
           {documents.length === 0 ? (
-            <div className={`p-4 text-center text-xs rounded-lg border ${theme === 'dark' ? 'text-slate-500 border-slate-900' : 'text-slate-400 border-slate-200 bg-slate-50'}`}>
+            <div className={`p-4 text-center text-xs rounded-lg border ${theme === 'dark' ? 'text-slate-500 border-slate-900' : 'text-slate-600 border-slate-300 bg-slate-50 font-medium'}`}>
               No documents indexed yet. Upload a policy PDF or document to begin.
             </div>
           ) : (
@@ -1087,24 +1087,24 @@ export default function App() {
                     isSelected
                       ? theme === 'dark'
                         ? 'bg-slate-800/90 border-emerald-500/50 shadow-sm'
-                        : 'bg-emerald-50 border-emerald-400/60 shadow-xs'
+                        : 'bg-emerald-50/90 border-2 border-emerald-500/70 shadow-xs'
                       : theme === 'dark'
                       ? 'bg-slate-900/60 border-slate-800/80 hover:border-slate-700 hover:bg-slate-900'
-                      : 'bg-slate-50 border-slate-200 hover:border-slate-300 hover:bg-slate-100'
+                      : 'bg-white border border-slate-300 hover:border-slate-400 hover:bg-slate-50 shadow-xs'
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-start gap-2 overflow-hidden">
-                      <FileText className={`w-4 h-4 mt-0.5 shrink-0 ${isSelected ? 'text-emerald-500' : theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`} />
+                      <FileText className={`w-4 h-4 mt-0.5 shrink-0 ${isSelected ? (theme === 'dark' ? 'text-emerald-400' : 'text-emerald-700') : (theme === 'dark' ? 'text-slate-400' : 'text-slate-600')}`} />
                       <div className="overflow-hidden">
-                        <p className={`font-medium truncate ${isSelected ? (theme === 'dark' ? 'text-emerald-300' : 'text-emerald-800') : (theme === 'dark' ? 'text-slate-200' : 'text-slate-800')}`} title={doc.filename}>
+                        <p className={`font-bold truncate ${isSelected ? (theme === 'dark' ? 'text-emerald-300' : 'text-emerald-950') : (theme === 'dark' ? 'text-slate-200' : 'text-slate-950')}`} title={doc.filename}>
                           {doc.filename}
                         </p>
-                        <div className="flex items-center gap-2 mt-1 text-[10px] text-slate-400">
-                          <span className={`px-1.5 py-0.5 rounded font-mono ${theme === 'dark' ? 'bg-slate-800 text-slate-300' : 'bg-slate-200 text-slate-700'}`}>
+                        <div className="flex items-center gap-2 mt-1 text-[10px]">
+                          <span className={`px-1.5 py-0.5 rounded font-mono font-bold ${theme === 'dark' ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-800 border border-slate-300'}`}>
                             {doc.chunk_count} {doc.chunk_count === 1 ? 'chunk' : 'chunks'}
                           </span>
-                          <span className="uppercase text-[9px] text-slate-500">{doc.file_type}</span>
+                          <span className={`uppercase text-[9px] font-bold ${theme === 'dark' ? 'text-slate-500' : 'text-slate-600'}`}>{doc.file_type}</span>
                         </div>
                       </div>
                     </div>
@@ -1127,20 +1127,20 @@ export default function App() {
         </div>
 
         {/* Free Tier Architecture Badges */}
-        <div className={`p-3 border-t text-[11px] space-y-1 ${theme === 'dark' ? 'border-slate-800/80 bg-slate-950/50 text-slate-400' : 'border-slate-200 bg-slate-50 text-slate-600'}`}>
+        <div className={`p-3 border-t text-[11px] space-y-1 ${theme === 'dark' ? 'border-slate-800/80 bg-slate-950/50 text-slate-400' : 'border-slate-200 bg-white text-slate-800 font-semibold'}`}>
           <div className="flex items-center justify-between">
             <span className="flex items-center gap-1.5">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
               <span>Anti-Hallucination Guard</span>
             </span>
-            <span className="text-[10px] text-emerald-500 font-mono">Active (0.58)</span>
+            <span className={`text-[10px] font-mono font-bold ${theme === 'dark' ? 'text-emerald-500' : 'text-emerald-700'}`}>Active (0.58)</span>
           </div>
           <div className="flex items-center justify-between">
             <span className="flex items-center gap-1.5">
-              <Layers className="w-3.5 h-3.5 text-blue-500" />
+              <Layers className="w-3.5 h-3.5 text-blue-600" />
               <span>Deduplication &amp; LRU</span>
             </span>
-            <span className="text-[10px] text-blue-500 font-mono">SHA-256</span>
+            <span className={`text-[10px] font-mono font-bold ${theme === 'dark' ? 'text-blue-500' : 'text-blue-700'}`}>SHA-256</span>
           </div>
         </div>
       </aside>
@@ -1149,12 +1149,12 @@ export default function App() {
       <main className={`flex-1 flex flex-col h-full relative overflow-hidden ${theme === 'dark' ? 'bg-[#07090e]' : 'bg-slate-100'}`}>
         
         {/* Top Header Bar */}
-        <header className={`h-14 border-b px-4 md:px-6 flex items-center justify-between shrink-0 backdrop-blur ${theme === 'dark' ? 'border-slate-800/80 bg-[#07090e]/95' : 'border-slate-200 bg-white/95'}`}>
+        <header className={`h-14 border-b px-4 md:px-6 flex items-center justify-between shrink-0 backdrop-blur ${theme === 'dark' ? 'border-slate-800/80 bg-[#07090e]/95' : 'border-b border-slate-300 bg-white shadow-xs'}`}>
           <div className="flex items-center gap-3">
             {!sidebarOpen && (
               <button
                 onClick={() => setSidebarOpen(true)}
-                className={`p-1.5 rounded-lg transition-colors ${theme === 'dark' ? 'text-slate-400 hover:text-slate-100 hover:bg-slate-800' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'}`}
+                className={`p-1.5 rounded-lg transition-colors ${theme === 'dark' ? 'text-slate-400 hover:text-slate-100 hover:bg-slate-800' : 'text-slate-700 hover:text-slate-950 hover:bg-slate-100'}`}
                 title="Open Sidebar"
               >
                 <PanelLeftOpen className="w-4 h-4" />
@@ -1162,8 +1162,8 @@ export default function App() {
             )}
             <div className="flex items-center gap-2.5">
               <span className="text-xl">🧭</span>
-              <span className={`font-semibold text-sm tracking-tight ${theme === 'dark' ? 'text-slate-100' : 'text-slate-800'}`}>PolicyPilot RAG</span>
-              <span className={`hidden sm:inline-block text-[11px] px-2 py-0.5 rounded border font-mono ${theme === 'dark' ? 'bg-slate-800/80 text-slate-300 border-slate-700/60' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+              <span className={`font-bold text-sm tracking-tight ${theme === 'dark' ? 'text-slate-100' : 'text-slate-950'}`}>PolicyPilot RAG</span>
+              <span className={`hidden sm:inline-block text-[11px] px-2 py-0.5 rounded border font-mono font-bold ${theme === 'dark' ? 'bg-slate-800/80 text-slate-300 border-slate-700/60' : 'bg-slate-100 text-slate-900 border-slate-300'}`}>
                 100% Free Stack
               </span>
             </div>
@@ -1173,10 +1173,10 @@ export default function App() {
             {/* Theme Toggle Button (Dark Mode / Normal Mode) */}
             <button
               onClick={toggleTheme}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border transition-colors ${
                 theme === 'dark'
                   ? 'bg-slate-900 border-slate-800 text-amber-300 hover:bg-slate-800 hover:text-amber-200'
-                  : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
+                  : 'bg-white border-slate-300 text-slate-900 hover:bg-slate-100 shadow-xs'
               }`}
               title={theme === 'dark' ? 'Switch to Normal (Light) Mode' : 'Switch to Dark Mode'}
             >
@@ -1187,17 +1187,17 @@ export default function App() {
                 </>
               ) : (
                 <>
-                  <Moon className="w-3.5 h-3.5 text-indigo-500" />
+                  <Moon className="w-3.5 h-3.5 text-indigo-600" />
                   <span className="hidden sm:inline text-[11px]">Dark Mode</span>
                 </>
               )}
             </button>
 
             {/* Active Scope Pill */}
-            <div className={`hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs border ${theme === 'dark' ? 'bg-slate-900 border-slate-800 text-slate-300' : 'bg-slate-100 border-slate-200 text-slate-600'}`}>
+            <div className={`hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs border font-semibold ${theme === 'dark' ? 'bg-slate-900 border-slate-800 text-slate-300' : 'bg-white border-slate-300 text-slate-800 shadow-xs'}`}>
               <Search className="w-3 h-3 text-slate-400" />
-              <span className="text-slate-400">Scope:</span>
-              <span className="font-medium text-emerald-500 max-w-[150px] truncate">
+              <span className={theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}>Scope:</span>
+              <span className={`font-bold max-w-[150px] truncate ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-700'}`}>
                 {selectedDocId === 'all'
                   ? 'All Documents'
                   : documents.find(d => d.doc_id === selectedDocId)?.filename || 'Active File'}
@@ -1207,7 +1207,7 @@ export default function App() {
             {/* Backend Status Indicator */}
             <div
               onClick={checkHealth}
-              className={`flex items-center gap-2 text-xs px-3 py-1 rounded-full border cursor-pointer ${theme === 'dark' ? 'bg-slate-900/90 border-slate-800 hover:border-slate-700' : 'bg-slate-100 border-slate-200 hover:border-slate-300'}`}
+              className={`flex items-center gap-2 text-xs px-3 py-1 rounded-full border cursor-pointer font-semibold ${theme === 'dark' ? 'bg-slate-900/90 border-slate-800 hover:border-slate-700' : 'bg-white border-slate-300 hover:border-slate-400 text-slate-900 shadow-xs'}`}
               title="Click to refresh status"
             >
               <span
@@ -1215,7 +1215,7 @@ export default function App() {
                   backendStatus === 'healthy' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-amber-500 animate-pulse'
                 }`}
               />
-              <span className={`text-[11px] hidden sm:inline ${theme === 'dark' ? 'text-slate-300' : 'text-slate-600'}`}>
+              <span className={`text-[11px] hidden sm:inline ${theme === 'dark' ? 'text-slate-300' : 'text-slate-800'}`}>
                 {backendStatus === 'healthy' ? 'Qdrant + Gemini Live' : 'Connecting backend...'}
               </span>
             </div>
@@ -1224,7 +1224,7 @@ export default function App() {
             {messages.length > 0 && (
               <button
                 onClick={() => setMessages([])}
-                className={`text-xs px-2 py-1 rounded transition-colors ${theme === 'dark' ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/80' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200'}`}
+                className={`text-xs px-2 py-1 rounded transition-colors font-medium ${theme === 'dark' ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/80' : 'text-slate-700 hover:text-slate-950 hover:bg-slate-200'}`}
                 title="Clear current conversation"
               >
                 Clear Chat
@@ -1239,14 +1239,18 @@ export default function App() {
           {/* Welcome Hero / Empty State */}
           {messages.length === 0 && (
             <div className="max-w-2xl mx-auto my-auto pt-8 pb-12 text-center space-y-6">
-              <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-emerald-500/20 to-teal-500/10 border border-emerald-500/30 flex items-center justify-center mx-auto text-emerald-500 shadow-xl">
+              <div className={`w-14 h-14 rounded-2xl border flex items-center justify-center mx-auto shadow-xl ${
+                theme === 'dark'
+                  ? 'bg-gradient-to-tr from-emerald-500/20 to-teal-500/10 border-emerald-500/30 text-emerald-500'
+                  : 'bg-emerald-100 border-2 border-emerald-400 text-emerald-700 shadow-md'
+              }`}>
                 <Compass className="w-7 h-7" />
               </div>
               <div className="space-y-2">
-                <h1 className={`text-2xl font-bold tracking-tight ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>
+                <h1 className={`text-2xl sm:text-3xl font-extrabold tracking-tight ${theme === 'dark' ? 'text-white' : 'text-slate-950'}`}>
                   Public Policy &amp; Procedures Assistant
                 </h1>
-                <p className={`text-sm max-w-lg mx-auto leading-relaxed ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>
+                <p className={`text-sm sm:text-base max-w-lg mx-auto leading-relaxed ${theme === 'dark' ? 'text-slate-400' : 'text-slate-700 font-medium'}`}>
                   Ask policy questions with zero hallucination. Supports tables, diagrams, structured summaries, and exact sentence limits.
                 </p>
               </div>
@@ -1254,10 +1258,10 @@ export default function App() {
               {/* Starter Prompt Chips */}
               <div className="pt-2">
                 <div className="flex items-center justify-between mb-3 px-1">
-                  <p className={`text-xs font-semibold uppercase tracking-wider ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
+                  <p className={`text-xs font-bold uppercase tracking-wider ${theme === 'dark' ? 'text-slate-400' : 'text-slate-800'}`}>
                     Suggested Questions &amp; Formats
                   </p>
-                  <span className={`text-[11px] font-mono px-2 py-0.5 rounded truncate max-w-[220px] ${theme === 'dark' ? 'text-emerald-400 bg-emerald-950/60 border border-emerald-800/80' : 'text-emerald-700 bg-emerald-50 border border-emerald-200'}`}>
+                  <span className={`text-[11px] font-mono font-bold px-2.5 py-0.5 rounded truncate max-w-[220px] ${theme === 'dark' ? 'text-emerald-400 bg-emerald-950/60 border border-emerald-800/80' : 'text-emerald-950 bg-emerald-100 border border-emerald-300'}`}>
                     Scope: {activeDocName}
                   </span>
                 </div>
@@ -1272,11 +1276,11 @@ export default function App() {
                       className={`p-3 rounded-xl border text-xs transition-all flex items-start gap-2.5 group ${
                         theme === 'dark'
                           ? 'bg-slate-900/60 hover:bg-slate-900 border-slate-800/80 hover:border-emerald-500/40 text-slate-300'
-                          : 'bg-white hover:bg-slate-50 border-slate-200 hover:border-emerald-400 text-slate-700 shadow-xs'
+                          : 'bg-white hover:bg-emerald-50/50 border border-slate-300 hover:border-emerald-600 text-slate-950 shadow-xs hover:shadow-md'
                       }`}
                     >
-                      <Sparkles className="w-3.5 h-3.5 text-emerald-500 mt-0.5 shrink-0 group-hover:scale-110 transition-transform" />
-                      <span className="leading-snug">{q}</span>
+                      <Sparkles className="w-3.5 h-3.5 text-emerald-600 mt-0.5 shrink-0 group-hover:scale-110 transition-transform" />
+                      <span className={`leading-snug ${theme === 'dark' ? 'text-slate-300 group-hover:text-slate-100' : 'text-slate-950 font-semibold group-hover:text-emerald-950'}`}>{q}</span>
                     </button>
                   ))}
                 </div>
@@ -1738,10 +1742,10 @@ export default function App() {
             {/* Input Container */}
             <form
               onSubmit={handleAsk}
-              className={`relative border focus-within:border-emerald-500 focus-within:ring-1 focus-within:ring-emerald-500/30 rounded-2xl shadow-xl transition-all ${
+              className={`relative rounded-2xl transition-all ${
                 theme === 'dark'
-                  ? 'bg-[#0d121f] border-slate-700/80 text-slate-100'
-                  : 'bg-white border-slate-300 text-slate-900 shadow-sm'
+                  ? 'bg-[#0d121f] border border-slate-700/80 focus-within:border-emerald-500 focus-within:ring-1 focus-within:ring-emerald-500/30 text-slate-100 shadow-xl'
+                  : 'bg-white border-2 border-slate-300 focus-within:border-emerald-600 focus-within:ring-1 focus-within:ring-emerald-600/30 text-slate-950 shadow-md'
               }`}
             >
               <textarea
@@ -1751,10 +1755,10 @@ export default function App() {
                 onKeyDown={handleKeyDown}
                 rows={2}
                 placeholder="Ask any policy question... (Press Enter to send, Shift+Enter for newline)"
-                className={`w-full bg-transparent text-sm px-4 pt-3.5 pb-11 resize-none focus:outline-none leading-relaxed ${
+                className={`w-full bg-transparent text-sm px-4 pt-3.5 pb-11 resize-none focus:outline-none leading-relaxed font-medium ${
                   theme === 'dark'
                     ? 'text-slate-100 placeholder-slate-500'
-                    : 'text-slate-900 placeholder-slate-400'
+                    : 'text-slate-950 placeholder:text-slate-500'
                 }`}
               />
 
@@ -1764,15 +1768,15 @@ export default function App() {
                 {/* Active Scope filter badge (Attach button removed per request) */}
                 <div className="flex items-center gap-2">
                   {selectedDocId !== 'all' ? (
-                    <span className={`text-[10px] px-2 py-0.5 rounded font-mono truncate max-w-[200px] border ${
+                    <span className={`text-[10px] px-2 py-0.5 rounded font-mono font-bold truncate max-w-[200px] border ${
                       theme === 'dark'
                         ? 'bg-emerald-950/60 text-emerald-300 border-emerald-800/80'
-                        : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                        : 'bg-emerald-100 text-emerald-950 border border-emerald-300'
                     }`}>
                       Filter: {documents.find(d => d.doc_id === selectedDocId)?.filename}
                     </span>
                   ) : (
-                    <span className={`text-[11px] font-mono ${theme === 'dark' ? 'text-slate-500' : 'text-slate-600 font-medium'}`}>
+                    <span className={`text-[11px] font-mono font-bold ${theme === 'dark' ? 'text-slate-500' : 'text-slate-700'}`}>
                       Searching all {documents.length} document{documents.length === 1 ? '' : 's'}
                     </span>
                   )}
@@ -1784,10 +1788,10 @@ export default function App() {
                   disabled={!inputQuestion.trim() || loading}
                   className={`p-2 rounded-xl text-white transition-all flex items-center justify-center ${
                     inputQuestion.trim() && !loading
-                      ? 'bg-emerald-600 hover:bg-emerald-500 shadow-md shadow-emerald-900/40 cursor-pointer'
+                      ? 'bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-900/30 cursor-pointer'
                       : theme === 'dark'
                       ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
-                      : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                      : 'bg-slate-200 text-slate-500 border border-slate-300 cursor-not-allowed'
                   }`}
                   title="Ask Policy Question"
                 >
@@ -1796,7 +1800,7 @@ export default function App() {
               </div>
             </form>
 
-            <div className={`flex items-center justify-between text-[11px] mt-2 px-1 ${theme === 'dark' ? 'text-slate-500' : 'text-slate-600 font-medium'}`}>
+            <div className={`flex items-center justify-between text-[11px] mt-2 px-1 font-semibold ${theme === 'dark' ? 'text-slate-500' : 'text-slate-700'}`}>
               <span>PolicyPilot grounds answers in verified embeddings &bull; Zero Hallucination Guarantee</span>
               <span className="hidden sm:inline font-mono text-[10px]">Gemini 3.1 Flash Lite</span>
             </div>

@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import mermaid from 'mermaid';
+import { jsPDF } from 'jspdf';
+import * as XLSX from 'xlsx';
 import {
   Compass,
   Send,
@@ -23,7 +25,11 @@ import {
   Database,
   Pencil,
   RotateCcw,
-  X
+  X,
+  Download,
+  FileSpreadsheet,
+  FileDown,
+  Table
 } from 'lucide-react';
 
 // Initialize mermaid for dark mode diagrams
@@ -43,45 +49,184 @@ mermaid.initialize({
   }
 });
 
-function MermaidDiagram({ chart }) {
-  const containerRef = useRef(null);
-  const [svgContent, setSvgContent] = useState('');
-  const [error, setError] = useState(null);
+function ExportableTable({ children }) {
+  const tableRef = useRef(null);
 
-  useEffect(() => {
-    let isMounted = true;
-    const renderChart = async () => {
-      try {
-        const id = `mermaid-${Math.random().toString(36).substring(2, 9)}`;
-        const { svg } = await mermaid.render(id, chart);
-        if (isMounted) {
-          setSvgContent(svg);
-          setError(null);
-        }
-      } catch (err) {
-        if (isMounted) setError('Diagram rendering error');
-      }
-    };
-    renderChart();
-    return () => { isMounted = false; };
-  }, [chart]);
+  const extractTableData = () => {
+    if (!tableRef.current) return [];
+    const rows = Array.from(tableRef.current.querySelectorAll('tr'));
+    return rows.map(row => {
+      const cells = Array.from(row.querySelectorAll('th, td'));
+      return cells.map(cell => cell.innerText.trim());
+    });
+  };
 
-  if (error) {
-    return (
-      <pre className="p-3 bg-slate-950 border border-slate-800 rounded-lg text-xs font-mono text-slate-400 overflow-x-auto">
-        <code>{chart}</code>
-      </pre>
-    );
-  }
+  const handleDownloadCSV = () => {
+    const data = extractTableData();
+    if (!data.length) return;
+    const csvContent = data.map(row =>
+      row.map(cell => `"${cell.replace(/"/g, '""')}"`).join(',')
+    ).join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `policy_table_${Date.now()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadExcel = () => {
+    const data = extractTableData();
+    if (!data.length) return;
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'PolicyData');
+    XLSX.writeFile(wb, `policy_table_${Date.now()}.xlsx`);
+  };
 
   return (
-    <div
-      ref={containerRef}
-      className="my-3 p-4 bg-slate-950/80 rounded-xl border border-slate-800/80 flex justify-center overflow-x-auto shadow-inner"
-      dangerouslySetInnerHTML={{ __html: svgContent }}
-    />
+    <div className="my-4 rounded-xl border border-slate-700/80 bg-slate-900/60 overflow-hidden shadow-lg group/table">
+      {/* Table Export Toolbar */}
+      <div className="px-3.5 py-2 bg-slate-850/90 border-b border-slate-700/80 flex items-center justify-between text-xs text-slate-300">
+        <span className="font-semibold text-emerald-400 flex items-center gap-1.5 font-mono text-[11px]">
+          <Table className="w-3.5 h-3.5" />
+          <span>Policy Data Table</span>
+        </span>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleDownloadCSV}
+            className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-750 text-slate-200 hover:text-emerald-300 border border-slate-700 transition-colors flex items-center gap-1 text-[11px] font-medium"
+            title="Download table as CSV"
+          >
+            <Download className="w-3 h-3" />
+            <span>CSV</span>
+          </button>
+          <button
+            onClick={handleDownloadExcel}
+            className="px-2 py-1 rounded bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-300 border border-emerald-800/80 transition-colors flex items-center gap-1 text-[11px] font-medium"
+            title="Download table as Excel (.xlsx)"
+          >
+            <FileSpreadsheet className="w-3 h-3" />
+            <span>Excel (.xlsx)</span>
+          </button>
+        </div>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table ref={tableRef} className="min-w-full divide-y divide-slate-800 text-xs text-left">
+          {children}
+        </table>
+      </div>
+    </div>
   );
 }
+
+const exportToPdf = (question, answer, citations) => {
+  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+  const margin = 40;
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const maxLineWidth = pageWidth - margin * 2;
+  let cursorY = margin;
+
+  // Header Banner
+  doc.setFillColor(11, 15, 25);
+  doc.rect(0, 0, pageWidth, 55, 'F');
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(15);
+  doc.setTextColor(16, 185, 129); // emerald
+  doc.text('PolicyPilot RAG', margin, 35);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  doc.setTextColor(148, 163, 184); // slate-400
+  doc.text('Grounded Policy Compliance Report', margin + 140, 35);
+
+  cursorY = 80;
+
+  // Question Section
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(71, 85, 105); // slate-600
+  doc.text('USER QUESTION:', margin, cursorY);
+  cursorY += 15;
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  doc.setTextColor(15, 23, 42); // slate-900
+  const qLines = doc.splitTextToSize(question, maxLineWidth);
+  doc.text(qLines, margin, cursorY);
+  cursorY += qLines.length * 14 + 15;
+
+  // Divider
+  doc.setDrawColor(226, 232, 240);
+  doc.line(margin, cursorY, pageWidth - margin, cursorY);
+  cursorY += 18;
+
+  // Answer Section
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(5, 150, 105); // emerald-600
+  doc.text('GROUNDED ANSWER:', margin, cursorY);
+  cursorY += 16;
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9.5);
+  doc.setTextColor(30, 41, 59);
+
+  // Clean Markdown markers for PDF readability
+  const cleanAnswer = answer
+    .replace(/^#+\s+/gm, '')
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/\*(.*?)\*/g, '$1')
+    .replace(/```[a-z]*\n?/g, '')
+    .trim();
+
+  const aLines = doc.splitTextToSize(cleanAnswer, maxLineWidth);
+  for (let line of aLines) {
+    if (cursorY > pageHeight - 50) {
+      doc.addPage();
+      cursorY = margin;
+    }
+    doc.text(line, margin, cursorY);
+    cursorY += 13.5;
+  }
+
+  // Citations Section
+  if (citations && citations.length > 0) {
+    cursorY += 15;
+    if (cursorY > pageHeight - 70) {
+      doc.addPage();
+      cursorY = margin;
+    }
+    doc.setDrawColor(226, 232, 240);
+    doc.line(margin, cursorY, pageWidth - margin, cursorY);
+    cursorY += 15;
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9.5);
+    doc.setTextColor(5, 150, 105);
+    doc.text('VERIFIED SOURCE CITATIONS:', margin, cursorY);
+    cursorY += 14;
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    doc.setTextColor(100, 116, 139);
+
+    citations.forEach((c, idx) => {
+      const citeStr = typeof c === 'string'
+        ? `[${idx + 1}] ${c}`
+        : `${c.citation_id || `[${idx + 1}]`} ${c.filename || 'Document'} - ${c.page_or_section || 'Section'}`;
+      doc.text(citeStr, margin, cursorY);
+      cursorY += 12;
+    });
+  }
+
+  doc.save(`policypilot_report_${Date.now()}.pdf`);
+};
 
 export default function App() {
   const [backendStatus, setBackendStatus] = useState('checking'); // 'healthy', 'waking'
@@ -819,11 +964,9 @@ export default function App() {
                           blockquote: ({ node, ...props }) => (
                             <blockquote className="border-l-4 border-emerald-500/60 bg-emerald-950/20 px-3.5 py-2 my-2 rounded-r text-slate-300 italic" {...props} />
                           ),
-                          // Custom Table Components for perfect table formatting
-                          table: ({ node, ...props }) => (
-                            <div className="overflow-x-auto my-4 rounded-xl border border-slate-700/80 shadow-md">
-                              <table className="min-w-full divide-y divide-slate-800 text-xs text-left" {...props} />
-                            </div>
+                          // Exportable Table with CSV and Excel (.xlsx) download options
+                          table: ({ node, children, ...props }) => (
+                            <ExportableTable>{children}</ExportableTable>
                           ),
                           thead: ({ node, ...props }) => (
                             <thead className="bg-slate-850 text-slate-200 uppercase tracking-wider font-semibold border-b border-slate-700" {...props} />
@@ -950,24 +1093,39 @@ export default function App() {
                     )}
 
                     {/* Turn Timestamp & Actions */}
-                    <div className="flex items-center justify-between text-[10px] text-slate-500 px-1">
+                    <div className="flex items-center justify-between text-[10px] text-slate-500 px-1 pt-1">
                       <span className="font-mono">{msg.timestamp}</span>
-                      <button
-                        onClick={() => copyToClipboard(msg.content, msg.id)}
-                        className="flex items-center gap-1 text-slate-400 hover:text-slate-200 transition-colors"
-                      >
-                        {copiedId === msg.id ? (
-                          <>
-                            <Check className="w-3 h-3 text-emerald-400" />
-                            <span className="text-emerald-400">Copied</span>
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-3 h-3" />
-                            <span>Copy Answer</span>
-                          </>
-                        )}
-                      </button>
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => {
+                            const msgIdx = messages.findIndex(m => m.id === msg.id);
+                            const qText = msgIdx > 0 ? messages[msgIdx - 1]?.content : 'Policy Inquiry';
+                            exportToPdf(qText, msg.content, msg.citations);
+                          }}
+                          className="flex items-center gap-1 text-slate-400 hover:text-emerald-400 transition-colors"
+                          title="Export answer and citations as PDF document"
+                        >
+                          <FileDown className="w-3.5 h-3.5" />
+                          <span>Export PDF</span>
+                        </button>
+
+                        <button
+                          onClick={() => copyToClipboard(msg.content, msg.id)}
+                          className="flex items-center gap-1 text-slate-400 hover:text-slate-200 transition-colors"
+                        >
+                          {copiedId === msg.id ? (
+                            <>
+                              <Check className="w-3 h-3 text-emerald-400" />
+                              <span className="text-emerald-400">Copied</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3 h-3" />
+                              <span>Copy Answer</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
                     </div>
 
                   </div>

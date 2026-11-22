@@ -206,7 +206,11 @@ function ExportableCSVBlock({ rawCsv, scopeName = 'All Policy Documents', theme 
 
           <button
             onClick={handleDownloadCSV}
-            className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-750 text-slate-200 hover:text-emerald-400 border border-slate-700 transition-colors flex items-center gap-1 text-[11px] font-medium"
+            className={`px-2 py-1 rounded border transition-colors flex items-center gap-1 text-[11px] font-medium ${
+              theme === 'dark'
+                ? 'bg-slate-800 hover:bg-slate-750 text-slate-200 hover:text-emerald-300 border-slate-700'
+                : 'bg-white hover:bg-slate-100 text-slate-800 hover:text-emerald-700 border-slate-300 shadow-xs'
+            }`}
             title="Download as CSV file"
           >
             <Download className="w-3 h-3" />
@@ -215,7 +219,11 @@ function ExportableCSVBlock({ rawCsv, scopeName = 'All Policy Documents', theme 
 
           <button
             onClick={handleDownloadExcel}
-            className="px-2 py-1 rounded bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-300 border border-emerald-800/80 transition-colors flex items-center gap-1 text-[11px] font-medium"
+            className={`px-2 py-1 rounded border transition-colors flex items-center gap-1 text-[11px] font-medium ${
+              theme === 'dark'
+                ? 'bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-300 border-emerald-800/80'
+                : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-300 shadow-xs'
+            }`}
             title="Download as Excel spreadsheet"
           >
             <FileSpreadsheet className="w-3 h-3" />
@@ -226,27 +234,27 @@ function ExportableCSVBlock({ rawCsv, scopeName = 'All Policy Documents', theme 
 
       {viewMode === 'table' ? (
         <div className="overflow-x-auto max-h-96">
-          <table className="min-w-full divide-y divide-slate-800 text-xs text-left">
+          <table className={`min-w-full divide-y text-xs text-left ${theme === 'dark' ? 'divide-slate-800' : 'divide-slate-200'}`}>
             <thead className={`uppercase tracking-wider font-semibold sticky top-0 ${
-              theme === 'dark' ? 'bg-slate-850 text-slate-200 border-b border-slate-700' : 'bg-slate-100 text-slate-700 border-b border-slate-200'
+              theme === 'dark' ? 'bg-slate-850 text-slate-200 border-b border-slate-700' : 'bg-slate-100 text-slate-900 border-b border-slate-300'
             }`}>
               <tr>
                 {headers.map((h, i) => (
-                  <th key={i} className={`px-4 py-2 font-semibold text-emerald-500 border-b ${
-                    theme === 'dark' ? 'border-slate-700' : 'border-slate-200'
+                  <th key={i} className={`px-4 py-2 font-bold ${
+                    theme === 'dark' ? 'text-emerald-400 border-slate-700' : 'text-slate-900 border-slate-300'
                   }`}>
                     {h}
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody className={`divide-y ${theme === 'dark' ? 'divide-slate-800/60' : 'divide-slate-100'}`}>
+            <tbody className={`divide-y ${theme === 'dark' ? 'divide-slate-800/60' : 'divide-slate-200'}`}>
               {bodyRows.map((row, rIdx) => (
                 <tr key={rIdx} className={`transition-colors ${
-                  theme === 'dark' ? 'hover:bg-slate-800/40 text-slate-300' : 'hover:bg-slate-50 text-slate-700'
+                  theme === 'dark' ? 'hover:bg-slate-800/40 text-slate-300' : 'hover:bg-slate-50 text-slate-900'
                 }`}>
                   {row.map((cell, cIdx) => (
-                    <td key={cIdx} className="px-4 py-2 border-b border-transparent">
+                    <td key={cIdx} className={`px-4 py-2 border-b ${theme === 'dark' ? 'border-transparent text-slate-300' : 'border-slate-100 text-slate-900'}`}>
                       {cell}
                     </td>
                   ))}
@@ -266,7 +274,51 @@ function ExportableCSVBlock({ rawCsv, scopeName = 'All Policy Documents', theme 
   );
 }
 
-function ExportableTable({ children, scopeName = 'All Policy Documents' }) {
+function MermaidDiagram({ chart, theme = 'dark' }) {
+  const containerRef = useRef(null);
+  const [svgContent, setSvgContent] = useState('');
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    const renderChart = async () => {
+      try {
+        const id = `mermaid-${Math.random().toString(36).substring(2, 9)}`;
+        const { svg } = await mermaid.render(id, chart);
+        if (isMounted) {
+          setSvgContent(svg);
+          setError(null);
+        }
+      } catch (err) {
+        if (isMounted) setError('Diagram rendering error');
+      }
+    };
+    renderChart();
+    return () => { isMounted = false; };
+  }, [chart]);
+
+  if (error) {
+    return (
+      <pre className={`p-3 border rounded-lg text-xs font-mono overflow-x-auto ${
+        theme === 'dark' ? 'bg-slate-950 border-slate-800 text-slate-400' : 'bg-slate-100 border-slate-300 text-slate-700'
+      }`}>
+        <code>{chart}</code>
+      </pre>
+    );
+  }
+
+  return (
+    <div
+      ref={containerRef}
+      className={`my-3 p-4 rounded-xl border flex justify-center overflow-x-auto shadow-inner ${
+        theme === 'dark' ? 'bg-slate-950/80 border-slate-800/80' : 'bg-white border-slate-200'
+      }`}
+      dangerouslySetInnerHTML={{ __html: svgContent }}
+    />
+  );
+}
+
+function ExportableTable({ children, scopeName = 'All Policy Documents', theme = 'dark' }) {
   const tableRef = useRef(null);
 
   const extractTableData = () => {
@@ -343,17 +395,25 @@ function ExportableTable({ children, scopeName = 'All Policy Documents' }) {
   };
 
   return (
-    <div className="my-4 rounded-xl border border-slate-700/80 bg-slate-900/60 overflow-hidden shadow-lg group/table">
+    <div className={`my-4 rounded-xl border overflow-hidden shadow-sm ${
+      theme === 'dark' ? 'border-slate-700/80 bg-slate-900/60' : 'border-slate-300 bg-white'
+    }`}>
       {/* Table Export Toolbar */}
-      <div className="px-3.5 py-2 bg-slate-850/90 border-b border-slate-700/80 flex items-center justify-between text-xs text-slate-300">
-        <span className="font-semibold text-emerald-400 flex items-center gap-1.5 font-mono text-[11px]">
+      <div className={`px-3.5 py-2.5 border-b flex items-center justify-between text-xs ${
+        theme === 'dark' ? 'bg-slate-850/90 border-slate-700/80 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-900'
+      }`}>
+        <span className="font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 font-mono text-[11px]">
           <Table className="w-3.5 h-3.5" />
           <span>Policy Data Matrix</span>
         </span>
         <div className="flex items-center gap-2">
           <button
             onClick={handleDownloadCSV}
-            className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-750 text-slate-200 hover:text-emerald-300 border border-slate-700 transition-colors flex items-center gap-1 text-[11px] font-medium"
+            className={`px-2 py-1 rounded border transition-colors flex items-center gap-1 text-[11px] font-medium ${
+              theme === 'dark'
+                ? 'bg-slate-800 hover:bg-slate-750 text-slate-200 hover:text-emerald-300 border-slate-700'
+                : 'bg-white hover:bg-slate-100 text-slate-800 hover:text-emerald-700 border-slate-300 shadow-xs'
+            }`}
             title="Download table as CSV with executive summary"
           >
             <Download className="w-3 h-3" />
@@ -361,7 +421,11 @@ function ExportableTable({ children, scopeName = 'All Policy Documents' }) {
           </button>
           <button
             onClick={handleDownloadExcel}
-            className="px-2 py-1 rounded bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-300 border border-emerald-800/80 transition-colors flex items-center gap-1 text-[11px] font-medium"
+            className={`px-2 py-1 rounded border transition-colors flex items-center gap-1 text-[11px] font-medium ${
+              theme === 'dark'
+                ? 'bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-300 border-emerald-800/80'
+                : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-300 shadow-xs'
+            }`}
             title="Download table as formatted Excel (.xlsx) with executive summary"
           >
             <FileSpreadsheet className="w-3 h-3" />
@@ -371,7 +435,9 @@ function ExportableTable({ children, scopeName = 'All Policy Documents' }) {
       </div>
 
       <div className="overflow-x-auto">
-        <table ref={tableRef} className="min-w-full divide-y divide-slate-800 text-xs text-left">
+        <table ref={tableRef} className={`min-w-full divide-y text-xs text-left ${
+          theme === 'dark' ? 'divide-slate-800 text-slate-300' : 'divide-slate-200 text-slate-900'
+        }`}>
           {children}
         </table>
       </div>
@@ -578,6 +644,18 @@ export default function App() {
     checkHealth();
     loadDocuments();
   }, []);
+
+  useEffect(() => {
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+      document.body.style.backgroundColor = '#07090e';
+      document.body.style.color = '#f1f5f9';
+    } else {
+      document.documentElement.classList.remove('dark');
+      document.body.style.backgroundColor = '#f8fafc';
+      document.body.style.color = '#0f172a';
+    }
+  }, [theme]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -1338,38 +1416,38 @@ export default function App() {
                             <h3 className={`text-sm font-semibold mt-3 mb-1 ${theme === 'dark' ? 'text-slate-200' : 'text-slate-800'}`} {...props} />
                           ),
                           p: ({ node, ...props }) => (
-                            <p className={`leading-relaxed mb-3 last:mb-0 ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`} {...props} />
+                            <p className={`leading-relaxed mb-3 last:mb-0 ${theme === 'dark' ? 'text-slate-300' : 'text-slate-900 font-normal'}`} {...props} />
                           ),
                           ul: ({ node, ...props }) => (
-                            <ul className={`list-disc list-outside pl-5 mb-3 space-y-1.5 ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`} {...props} />
+                            <ul className={`list-disc list-outside pl-5 mb-3 space-y-1.5 ${theme === 'dark' ? 'text-slate-300' : 'text-slate-900'}`} {...props} />
                           ),
                           ol: ({ node, ...props }) => (
-                            <ol className={`list-decimal list-outside pl-5 mb-3 space-y-1.5 ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`} {...props} />
+                            <ol className={`list-decimal list-outside pl-5 mb-3 space-y-1.5 ${theme === 'dark' ? 'text-slate-300' : 'text-slate-900'}`} {...props} />
                           ),
                           li: ({ node, ...props }) => (
-                            <li className="leading-relaxed pl-1 marker:text-emerald-500" {...props} />
+                            <li className={`leading-relaxed pl-1 marker:text-emerald-500 ${theme === 'dark' ? 'text-slate-300' : 'text-slate-900'}`} {...props} />
                           ),
                           strong: ({ node, ...props }) => (
-                            <strong className={`font-semibold ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`} {...props} />
+                            <strong className={`font-semibold ${theme === 'dark' ? 'text-white' : 'text-slate-950 font-bold'}`} {...props} />
                           ),
                           em: ({ node, ...props }) => (
-                            <em className={`italic ${theme === 'dark' ? 'text-slate-200' : 'text-slate-700'}`} {...props} />
+                            <em className={`italic ${theme === 'dark' ? 'text-slate-200' : 'text-slate-900 font-medium'}`} {...props} />
                           ),
                           blockquote: ({ node, ...props }) => (
-                            <blockquote className={`border-l-4 border-emerald-500/60 px-3.5 py-2 my-2 rounded-r italic ${theme === 'dark' ? 'bg-emerald-950/20 text-slate-300' : 'bg-emerald-50 text-slate-700'}`} {...props} />
+                            <blockquote className={`border-l-4 border-emerald-500/60 px-3.5 py-2 my-2 rounded-r italic ${theme === 'dark' ? 'bg-emerald-950/20 text-slate-300' : 'bg-emerald-50 text-slate-900 border-emerald-600'}`} {...props} />
                           ),
                           // Exportable Table with CSV and Excel (.xlsx) download options
                           table: ({ node, children, ...props }) => (
-                            <ExportableTable scopeName={activeDocName}>{children}</ExportableTable>
+                            <ExportableTable scopeName={activeDocName} theme={theme}>{children}</ExportableTable>
                           ),
                           thead: ({ node, ...props }) => (
-                            <thead className={`uppercase tracking-wider font-semibold border-b ${theme === 'dark' ? 'bg-slate-850 text-slate-200 border-slate-700' : 'bg-slate-100 text-slate-700 border-slate-200'}`} {...props} />
+                            <thead className={`uppercase tracking-wider font-semibold border-b ${theme === 'dark' ? 'bg-slate-850 text-slate-200 border-slate-700' : 'bg-slate-100 text-slate-900 border-slate-300'}`} {...props} />
                           ),
                           th: ({ node, ...props }) => (
-                            <th className={`px-4 py-2.5 font-semibold text-emerald-600 ${theme === 'dark' ? 'bg-slate-900/90 text-emerald-400' : 'bg-slate-100 text-emerald-700'}`} {...props} />
+                            <th className={`px-4 py-2.5 font-bold ${theme === 'dark' ? 'bg-slate-900/90 text-emerald-400' : 'bg-slate-100 text-slate-900 border-slate-300'}`} {...props} />
                           ),
                           td: ({ node, ...props }) => (
-                            <td className={`px-4 py-2 border-b transition-colors ${theme === 'dark' ? 'text-slate-300 border-slate-800/60 hover:bg-slate-800/30' : 'text-slate-700 border-slate-100 hover:bg-slate-50'}`} {...props} />
+                            <td className={`px-4 py-2 border-b transition-colors ${theme === 'dark' ? 'text-slate-300 border-slate-800/60 hover:bg-slate-800/30' : 'text-slate-900 border-slate-200 hover:bg-slate-50'}`} {...props} />
                           ),
                           // Code, Mermaid Diagram & CSV Renderer
                           code: ({ node, inline, className, children, ...props }) => {
@@ -1377,7 +1455,7 @@ export default function App() {
                             const isMermaid = match && match[1] === 'mermaid';
 
                             if (isMermaid) {
-                              return <MermaidDiagram chart={String(children).replace(/\n$/, '')} />;
+                              return <MermaidDiagram chart={String(children).replace(/\n$/, '')} theme={theme} />;
                             }
 
                             const rawText = String(children).trim();
@@ -1397,7 +1475,7 @@ export default function App() {
 
                             if (inline) {
                               return (
-                                <code className={`px-1.5 py-0.5 rounded text-xs font-mono border ${theme === 'dark' ? 'bg-slate-800 text-emerald-300 border-slate-700/60' : 'bg-slate-100 text-emerald-700 border-slate-200'}`} {...props}>
+                                <code className={`px-1.5 py-0.5 rounded text-xs font-mono border ${theme === 'dark' ? 'bg-slate-800 text-emerald-300 border-slate-700/60' : 'bg-slate-100 text-emerald-800 font-semibold border-slate-300'}`} {...props}>
                                   {children}
                                 </code>
                               );
@@ -1663,7 +1741,7 @@ export default function App() {
               className={`relative border focus-within:border-emerald-500 focus-within:ring-1 focus-within:ring-emerald-500/30 rounded-2xl shadow-xl transition-all ${
                 theme === 'dark'
                   ? 'bg-[#0d121f] border-slate-700/80 text-slate-100'
-                  : 'bg-slate-50 border-slate-300 text-slate-800'
+                  : 'bg-white border-slate-300 text-slate-900 shadow-sm'
               }`}
             >
               <textarea
@@ -1676,7 +1754,7 @@ export default function App() {
                 className={`w-full bg-transparent text-sm px-4 pt-3.5 pb-11 resize-none focus:outline-none leading-relaxed ${
                   theme === 'dark'
                     ? 'text-slate-100 placeholder-slate-500'
-                    : 'text-slate-800 placeholder-slate-400'
+                    : 'text-slate-900 placeholder-slate-400'
                 }`}
               />
 
@@ -1694,7 +1772,7 @@ export default function App() {
                       Filter: {documents.find(d => d.doc_id === selectedDocId)?.filename}
                     </span>
                   ) : (
-                    <span className={`text-[11px] font-mono ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
+                    <span className={`text-[11px] font-mono ${theme === 'dark' ? 'text-slate-500' : 'text-slate-600 font-medium'}`}>
                       Searching all {documents.length} document{documents.length === 1 ? '' : 's'}
                     </span>
                   )}
@@ -1707,7 +1785,9 @@ export default function App() {
                   className={`p-2 rounded-xl text-white transition-all flex items-center justify-center ${
                     inputQuestion.trim() && !loading
                       ? 'bg-emerald-600 hover:bg-emerald-500 shadow-md shadow-emerald-900/40 cursor-pointer'
-                      : 'bg-slate-300 dark:bg-slate-800 text-slate-500 cursor-not-allowed'
+                      : theme === 'dark'
+                      ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                      : 'bg-slate-200 text-slate-400 cursor-not-allowed'
                   }`}
                   title="Ask Policy Question"
                 >
@@ -1716,7 +1796,7 @@ export default function App() {
               </div>
             </form>
 
-            <div className={`flex items-center justify-between text-[11px] mt-2 px-1 ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
+            <div className={`flex items-center justify-between text-[11px] mt-2 px-1 ${theme === 'dark' ? 'text-slate-500' : 'text-slate-600 font-medium'}`}>
               <span>PolicyPilot grounds answers in verified embeddings &bull; Zero Hallucination Guarantee</span>
               <span className="hidden sm:inline font-mono text-[10px]">Gemini 3.1 Flash Lite</span>
             </div>

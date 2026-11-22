@@ -29,7 +29,9 @@ import {
   Download,
   FileSpreadsheet,
   FileDown,
-  Table
+  Table,
+  Sun,
+  Moon
 } from 'lucide-react';
 
 // Initialize mermaid for dark mode diagrams
@@ -241,6 +243,15 @@ export default function App() {
   const [isDragging, setIsDragging] = useState(false);
   const [expandedInspectors, setExpandedInspectors] = useState({});
   const [copiedId, setCopiedId] = useState(null);
+
+  // Theme state: 'dark' (default) or 'light'
+  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
+
+  const toggleTheme = () => {
+    const nextTheme = theme === 'dark' ? 'light' : 'dark';
+    setTheme(nextTheme);
+    localStorage.setItem('theme', nextTheme);
+  };
 
   // Edit question state
   const [editingMessageId, setEditingMessageId] = useState(null);
@@ -555,7 +566,7 @@ export default function App() {
     : documents.find(d => d.doc_id === selectedDocId)?.filename || 'Selected Policy';
 
   return (
-    <div className="flex h-screen bg-[#07090e] text-slate-100 font-sans antialiased overflow-hidden">
+    <div className={`flex h-screen font-sans antialiased overflow-hidden ${theme === 'dark' ? 'bg-[#07090e] text-slate-100' : 'bg-slate-100 text-slate-800'}`}>
       
       {/* Hidden File Input */}
       <input
@@ -568,24 +579,24 @@ export default function App() {
 
       {/* ================= LEFT SIDEBAR (DOCUMENTS & KNOWLEDGE BASE) ================= */}
       <aside
-        className={`flex flex-col border-r border-slate-800/80 bg-[#0b0f19] transition-all duration-300 z-20 ${
+        className={`flex flex-col transition-all duration-300 z-20 ${
           sidebarOpen ? 'w-80 min-w-[20rem]' : 'w-0 -translate-x-full border-r-0 overflow-hidden'
-        }`}
+        } ${theme === 'dark' ? 'border-r border-slate-800/80 bg-[#0b0f19]' : 'border-r border-slate-200 bg-white text-slate-800'}`}
       >
         {/* Sidebar Header */}
-        <div className="p-4 border-b border-slate-800/80 flex items-center justify-between">
+        <div className={`p-4 border-b flex items-center justify-between ${theme === 'dark' ? 'border-slate-800/80' : 'border-slate-200'}`}>
           <div className="flex items-center gap-2.5">
             <div className="p-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
               <Compass className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="font-semibold text-sm text-slate-100 tracking-wide">Knowledge Base</h2>
-              <p className="text-[11px] text-slate-400">Qdrant Cloud Vectors</p>
+              <h2 className={`font-semibold text-sm tracking-wide ${theme === 'dark' ? 'text-slate-100' : 'text-slate-800'}`}>Knowledge Base</h2>
+              <p className={`text-[11px] ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>Qdrant Cloud Vectors</p>
             </div>
           </div>
           <button
             onClick={() => setSidebarOpen(false)}
-            className="p-1 rounded text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
+            className={`p-1 rounded transition-colors ${theme === 'dark' ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'}`}
             title="Collapse Sidebar"
           >
             <PanelLeftClose className="w-4 h-4" />
@@ -593,7 +604,7 @@ export default function App() {
         </div>
 
         {/* Upload Zone / Dropzone */}
-        <div className="p-4 border-b border-slate-800/60">
+        <div className={`p-4 border-b ${theme === 'dark' ? 'border-slate-800/60' : 'border-slate-200'}`}>
           <div
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
@@ -601,15 +612,17 @@ export default function App() {
             onClick={() => fileInputRef.current?.click()}
             className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-colors ${
               isDragging
-                ? 'border-emerald-500 bg-emerald-500/10 text-emerald-300'
-                : 'border-slate-800 hover:border-slate-700 bg-slate-900/40 hover:bg-slate-900/80 text-slate-400'
+                ? 'border-emerald-500 bg-emerald-500/10 text-emerald-600'
+                : theme === 'dark'
+                ? 'border-slate-800 hover:border-slate-700 bg-slate-900/40 hover:bg-slate-900/80 text-slate-400'
+                : 'border-slate-300 hover:border-emerald-500 bg-slate-50 hover:bg-slate-100 text-slate-600'
             }`}
           >
-            <UploadCloud className="w-6 h-6 mx-auto mb-1.5 text-slate-300" />
-            <p className="text-xs font-medium text-slate-200">
+            <UploadCloud className={`w-6 h-6 mx-auto mb-1.5 ${theme === 'dark' ? 'text-slate-300' : 'text-slate-500'}`} />
+            <p className={`text-xs font-medium ${theme === 'dark' ? 'text-slate-200' : 'text-slate-700'}`}>
               {uploadLoading ? 'Indexing vectors...' : 'Drop or browse policy files'}
             </p>
-            <p className="text-[10px] text-slate-500 mt-1">PDF, DOCX, XLSX, CSV, PPTX, HTML</p>
+            <p className={`text-[10px] mt-1 ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>PDF, DOCX, XLSX, CSV, PPTX, HTML</p>
           </div>
 
           {/* Upload Status Banner */}
@@ -633,30 +646,34 @@ export default function App() {
 
         {/* Scope Selector: All Documents vs Specific */}
         <div className="px-4 pt-3 pb-1">
-          <div className="flex items-center justify-between text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2">
+          <div className={`flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider mb-2 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
             <span>Query Scope Filter</span>
-            <span className="text-emerald-400 font-mono text-[10px]">{documents.length} Indexed</span>
+            <span className="text-emerald-500 font-mono text-[10px]">{documents.length} Indexed</span>
           </div>
           <button
             onClick={() => setSelectedDocId('all')}
             className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium flex items-center justify-between transition-colors mb-1.5 ${
               selectedDocId === 'all'
-                ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
-                : 'text-slate-300 hover:bg-slate-850 hover:text-white border border-transparent'
+                ? theme === 'dark'
+                  ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                  : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                : theme === 'dark'
+                ? 'text-slate-300 hover:bg-slate-850 hover:text-white border border-transparent'
+                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-transparent'
             }`}
           >
             <div className="flex items-center gap-2">
               <Database className="w-3.5 h-3.5" />
               <span>Search Across All Documents</span>
             </div>
-            {selectedDocId === 'all' && <Check className="w-3.5 h-3.5 text-emerald-400" />}
+            {selectedDocId === 'all' && <Check className="w-3.5 h-3.5 text-emerald-500" />}
           </button>
         </div>
 
         {/* Document List */}
         <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-1.5">
           {documents.length === 0 ? (
-            <div className="p-4 text-center text-xs text-slate-500 border border-slate-900 rounded-lg">
+            <div className={`p-4 text-center text-xs rounded-lg border ${theme === 'dark' ? 'text-slate-500 border-slate-900' : 'text-slate-400 border-slate-200 bg-slate-50'}`}>
               No documents indexed yet. Upload a policy PDF or document to begin.
             </div>
           ) : (
@@ -668,19 +685,23 @@ export default function App() {
                   onClick={() => setSelectedDocId(isSelected ? 'all' : doc.doc_id)}
                   className={`group relative p-2.5 rounded-lg border text-xs cursor-pointer transition-all ${
                     isSelected
-                      ? 'bg-slate-800/90 border-emerald-500/50 shadow-sm'
-                      : 'bg-slate-900/60 border-slate-800/80 hover:border-slate-700 hover:bg-slate-900'
+                      ? theme === 'dark'
+                        ? 'bg-slate-800/90 border-emerald-500/50 shadow-sm'
+                        : 'bg-emerald-50 border-emerald-400/60 shadow-xs'
+                      : theme === 'dark'
+                      ? 'bg-slate-900/60 border-slate-800/80 hover:border-slate-700 hover:bg-slate-900'
+                      : 'bg-slate-50 border-slate-200 hover:border-slate-300 hover:bg-slate-100'
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-start gap-2 overflow-hidden">
-                      <FileText className={`w-4 h-4 mt-0.5 shrink-0 ${isSelected ? 'text-emerald-400' : 'text-slate-400'}`} />
+                      <FileText className={`w-4 h-4 mt-0.5 shrink-0 ${isSelected ? 'text-emerald-500' : theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`} />
                       <div className="overflow-hidden">
-                        <p className="font-medium text-slate-200 truncate" title={doc.filename}>
+                        <p className={`font-medium truncate ${isSelected ? (theme === 'dark' ? 'text-emerald-300' : 'text-emerald-800') : (theme === 'dark' ? 'text-slate-200' : 'text-slate-800')}`} title={doc.filename}>
                           {doc.filename}
                         </p>
                         <div className="flex items-center gap-2 mt-1 text-[10px] text-slate-400">
-                          <span className="bg-slate-800 px-1.5 py-0.5 rounded text-slate-300 font-mono">
+                          <span className={`px-1.5 py-0.5 rounded font-mono ${theme === 'dark' ? 'bg-slate-800 text-slate-300' : 'bg-slate-200 text-slate-700'}`}>
                             {doc.chunk_count} {doc.chunk_count === 1 ? 'chunk' : 'chunks'}
                           </span>
                           <span className="uppercase text-[9px] text-slate-500">{doc.file_type}</span>
@@ -693,7 +714,7 @@ export default function App() {
                         e.stopPropagation();
                         handleDeleteDocument(doc.doc_id, doc.filename);
                       }}
-                      className="opacity-0 group-hover:opacity-100 p-1 text-slate-500 hover:text-rose-400 hover:bg-rose-950/30 rounded transition-opacity"
+                      className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-rose-500 hover:bg-rose-100/50 rounded transition-opacity"
                       title="Delete document"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -706,34 +727,34 @@ export default function App() {
         </div>
 
         {/* Free Tier Architecture Badges */}
-        <div className="p-3 border-t border-slate-800/80 bg-slate-950/50 text-[11px] text-slate-400 space-y-1">
+        <div className={`p-3 border-t text-[11px] space-y-1 ${theme === 'dark' ? 'border-slate-800/80 bg-slate-950/50 text-slate-400' : 'border-slate-200 bg-slate-50 text-slate-600'}`}>
           <div className="flex items-center justify-between">
             <span className="flex items-center gap-1.5">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
               <span>Anti-Hallucination Guard</span>
             </span>
-            <span className="text-[10px] text-emerald-400 font-mono">Active (0.58)</span>
+            <span className="text-[10px] text-emerald-500 font-mono">Active (0.58)</span>
           </div>
           <div className="flex items-center justify-between">
             <span className="flex items-center gap-1.5">
-              <Layers className="w-3.5 h-3.5 text-blue-400" />
+              <Layers className="w-3.5 h-3.5 text-blue-500" />
               <span>Deduplication &amp; LRU</span>
             </span>
-            <span className="text-[10px] text-blue-400 font-mono">SHA-256</span>
+            <span className="text-[10px] text-blue-500 font-mono">SHA-256</span>
           </div>
         </div>
       </aside>
 
       {/* ================= MAIN CHAT AREA (CLAUDE CODE STYLE) ================= */}
-      <main className="flex-1 flex flex-col h-full bg-[#07090e] relative overflow-hidden">
+      <main className={`flex-1 flex flex-col h-full relative overflow-hidden ${theme === 'dark' ? 'bg-[#07090e]' : 'bg-slate-100'}`}>
         
         {/* Top Header Bar */}
-        <header className="h-14 border-b border-slate-800/80 px-4 md:px-6 flex items-center justify-between shrink-0 bg-[#07090e]/95 backdrop-blur">
+        <header className={`h-14 border-b px-4 md:px-6 flex items-center justify-between shrink-0 backdrop-blur ${theme === 'dark' ? 'border-slate-800/80 bg-[#07090e]/95' : 'border-slate-200 bg-white/95'}`}>
           <div className="flex items-center gap-3">
             {!sidebarOpen && (
               <button
                 onClick={() => setSidebarOpen(true)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors"
+                className={`p-1.5 rounded-lg transition-colors ${theme === 'dark' ? 'text-slate-400 hover:text-slate-100 hover:bg-slate-800' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'}`}
                 title="Open Sidebar"
               >
                 <PanelLeftOpen className="w-4 h-4" />
@@ -741,19 +762,42 @@ export default function App() {
             )}
             <div className="flex items-center gap-2.5">
               <span className="text-xl">🧭</span>
-              <span className="font-semibold text-slate-100 text-sm tracking-tight">PolicyPilot RAG</span>
-              <span className="hidden sm:inline-block bg-slate-800/80 text-slate-300 text-[11px] px-2 py-0.5 rounded border border-slate-700/60 font-mono">
+              <span className={`font-semibold text-sm tracking-tight ${theme === 'dark' ? 'text-slate-100' : 'text-slate-800'}`}>PolicyPilot RAG</span>
+              <span className={`hidden sm:inline-block text-[11px] px-2 py-0.5 rounded border font-mono ${theme === 'dark' ? 'bg-slate-800/80 text-slate-300 border-slate-700/60' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
                 100% Free Stack
               </span>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* Theme Toggle Button (Dark Mode / Normal Mode) */}
+            <button
+              onClick={toggleTheme}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
+                theme === 'dark'
+                  ? 'bg-slate-900 border-slate-800 text-amber-300 hover:bg-slate-800 hover:text-amber-200'
+                  : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
+              }`}
+              title={theme === 'dark' ? 'Switch to Normal (Light) Mode' : 'Switch to Dark Mode'}
+            >
+              {theme === 'dark' ? (
+                <>
+                  <Sun className="w-3.5 h-3.5 text-amber-400" />
+                  <span className="hidden sm:inline text-[11px]">Normal Mode</span>
+                </>
+              ) : (
+                <>
+                  <Moon className="w-3.5 h-3.5 text-indigo-500" />
+                  <span className="hidden sm:inline text-[11px]">Dark Mode</span>
+                </>
+              )}
+            </button>
+
             {/* Active Scope Pill */}
-            <div className="hidden md:flex items-center gap-1.5 bg-slate-900 px-2.5 py-1 rounded-md text-xs text-slate-300 border border-slate-800">
+            <div className={`hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs border ${theme === 'dark' ? 'bg-slate-900 border-slate-800 text-slate-300' : 'bg-slate-100 border-slate-200 text-slate-600'}`}>
               <Search className="w-3 h-3 text-slate-400" />
               <span className="text-slate-400">Scope:</span>
-              <span className="font-medium text-emerald-400 max-w-[150px] truncate">
+              <span className="font-medium text-emerald-500 max-w-[150px] truncate">
                 {selectedDocId === 'all'
                   ? 'All Documents'
                   : documents.find(d => d.doc_id === selectedDocId)?.filename || 'Active File'}
@@ -763,7 +807,7 @@ export default function App() {
             {/* Backend Status Indicator */}
             <div
               onClick={checkHealth}
-              className="flex items-center gap-2 text-xs bg-slate-900/90 px-3 py-1 rounded-full border border-slate-800 cursor-pointer hover:border-slate-700"
+              className={`flex items-center gap-2 text-xs px-3 py-1 rounded-full border cursor-pointer ${theme === 'dark' ? 'bg-slate-900/90 border-slate-800 hover:border-slate-700' : 'bg-slate-100 border-slate-200 hover:border-slate-300'}`}
               title="Click to refresh status"
             >
               <span
@@ -771,7 +815,7 @@ export default function App() {
                   backendStatus === 'healthy' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-amber-500 animate-pulse'
                 }`}
               />
-              <span className="text-slate-300 text-[11px] hidden sm:inline">
+              <span className={`text-[11px] hidden sm:inline ${theme === 'dark' ? 'text-slate-300' : 'text-slate-600'}`}>
                 {backendStatus === 'healthy' ? 'Qdrant + Gemini Live' : 'Connecting backend...'}
               </span>
             </div>
@@ -780,7 +824,7 @@ export default function App() {
             {messages.length > 0 && (
               <button
                 onClick={() => setMessages([])}
-                className="text-xs text-slate-400 hover:text-slate-200 px-2 py-1 rounded hover:bg-slate-800/80 transition-colors"
+                className={`text-xs px-2 py-1 rounded transition-colors ${theme === 'dark' ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/80' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200'}`}
                 title="Clear current conversation"
               >
                 Clear Chat
@@ -795,14 +839,14 @@ export default function App() {
           {/* Welcome Hero / Empty State */}
           {messages.length === 0 && (
             <div className="max-w-2xl mx-auto my-auto pt-8 pb-12 text-center space-y-6">
-              <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-emerald-500/20 to-teal-500/10 border border-emerald-500/30 flex items-center justify-center mx-auto text-emerald-400 shadow-xl">
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-emerald-500/20 to-teal-500/10 border border-emerald-500/30 flex items-center justify-center mx-auto text-emerald-500 shadow-xl">
                 <Compass className="w-7 h-7" />
               </div>
               <div className="space-y-2">
-                <h1 className="text-2xl font-bold text-white tracking-tight">
+                <h1 className={`text-2xl font-bold tracking-tight ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>
                   Public Policy &amp; Procedures Assistant
                 </h1>
-                <p className="text-sm text-slate-400 max-w-lg mx-auto leading-relaxed">
+                <p className={`text-sm max-w-lg mx-auto leading-relaxed ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>
                   Ask policy questions with zero hallucination. Supports tables, diagrams, structured summaries, and exact sentence limits.
                 </p>
               </div>
@@ -810,10 +854,10 @@ export default function App() {
               {/* Starter Prompt Chips */}
               <div className="pt-2">
                 <div className="flex items-center justify-between mb-3 px-1">
-                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                  <p className={`text-xs font-semibold uppercase tracking-wider ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
                     Suggested Questions &amp; Formats
                   </p>
-                  <span className="text-[11px] font-mono text-emerald-400 bg-emerald-950/60 border border-emerald-800/80 px-2 py-0.5 rounded truncate max-w-[220px]">
+                  <span className={`text-[11px] font-mono px-2 py-0.5 rounded truncate max-w-[220px] ${theme === 'dark' ? 'text-emerald-400 bg-emerald-950/60 border border-emerald-800/80' : 'text-emerald-700 bg-emerald-50 border border-emerald-200'}`}>
                     Scope: {activeDocName}
                   </span>
                 </div>
@@ -825,9 +869,13 @@ export default function App() {
                         setInputQuestion(q);
                         textareaRef.current?.focus();
                       }}
-                      className="p-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800/80 hover:border-emerald-500/40 text-xs text-slate-300 transition-all flex items-start gap-2.5 group"
+                      className={`p-3 rounded-xl border text-xs transition-all flex items-start gap-2.5 group ${
+                        theme === 'dark'
+                          ? 'bg-slate-900/60 hover:bg-slate-900 border-slate-800/80 hover:border-emerald-500/40 text-slate-300'
+                          : 'bg-white hover:bg-slate-50 border-slate-200 hover:border-emerald-400 text-slate-700 shadow-xs'
+                      }`}
                     >
-                      <Sparkles className="w-3.5 h-3.5 text-emerald-400 mt-0.5 shrink-0 group-hover:scale-110 transition-transform" />
+                      <Sparkles className="w-3.5 h-3.5 text-emerald-500 mt-0.5 shrink-0 group-hover:scale-110 transition-transform" />
                       <span className="leading-snug">{q}</span>
                     </button>
                   ))}
@@ -845,18 +893,26 @@ export default function App() {
                 <div className="flex flex-col items-end pl-8 group">
                   {editingMessageId === msg.id ? (
                     // Inline Edit Form
-                    <div className="w-full max-w-[90%] bg-slate-900 border border-emerald-500/60 rounded-2xl p-3 shadow-lg space-y-2">
+                    <div className={`w-full max-w-[90%] border border-emerald-500/60 rounded-2xl p-3 shadow-lg space-y-2 ${theme === 'dark' ? 'bg-slate-900' : 'bg-white'}`}>
                       <textarea
                         value={editText}
                         onChange={(e) => setEditText(e.target.value)}
-                        className="w-full bg-slate-950 text-slate-100 text-sm p-3 rounded-xl border border-slate-800 focus:outline-none focus:border-emerald-500 resize-none leading-relaxed"
+                        className={`w-full text-sm p-3 rounded-xl border focus:outline-none focus:border-emerald-500 resize-none leading-relaxed ${
+                          theme === 'dark'
+                            ? 'bg-slate-950 text-slate-100 border-slate-800'
+                            : 'bg-slate-50 text-slate-800 border-slate-200'
+                        }`}
                         rows={3}
                         autoFocus
                       />
                       <div className="flex items-center justify-end gap-2 text-xs">
                         <button
                           onClick={handleCancelEdit}
-                          className="px-3 py-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors flex items-center gap-1"
+                          className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 ${
+                            theme === 'dark'
+                              ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                          }`}
                         >
                           <X className="w-3.5 h-3.5" />
                           <span>Cancel</span>
@@ -874,18 +930,26 @@ export default function App() {
                   ) : (
                     // Regular Message Bubble
                     <div className="flex flex-col items-end">
-                      <div className="bg-[#1e2538] text-slate-100 rounded-2xl rounded-tr-sm px-4 py-3 text-sm shadow-md border border-slate-700/60 max-w-[85%]">
+                      <div className={`rounded-2xl rounded-tr-sm px-4 py-3 text-sm shadow-md max-w-[85%] ${
+                        theme === 'dark'
+                          ? 'bg-[#1e2538] text-slate-100 border border-slate-700/60'
+                          : 'bg-emerald-600 text-white border border-emerald-600 shadow-emerald-900/10'
+                      }`}>
                         <p className="leading-relaxed whitespace-pre-wrap">{msg.content}</p>
-                        <div className="flex items-center justify-between gap-4 mt-2 pt-1 border-t border-slate-700/40 text-[10px] text-slate-400">
+                        <div className={`flex items-center justify-between gap-4 mt-2 pt-1 border-t text-[10px] ${
+                          theme === 'dark'
+                            ? 'border-slate-700/40 text-slate-400'
+                            : 'border-emerald-500/50 text-emerald-100'
+                        }`}>
                           <span className="font-mono">{msg.timestamp}</span>
                           <div className="flex items-center gap-2">
                             <button
                               onClick={() => copyToClipboard(msg.content, `q-${msg.id}`)}
-                              className="hover:text-slate-200 transition-colors flex items-center gap-1"
+                              className={`transition-colors flex items-center gap-1 ${theme === 'dark' ? 'hover:text-slate-200' : 'hover:text-white'}`}
                               title="Copy Question"
                             >
                               {copiedId === `q-${msg.id}` ? (
-                                <Check className="w-3 h-3 text-emerald-400" />
+                                <Check className={`w-3 h-3 ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-200'}`} />
                               ) : (
                                 <Copy className="w-3 h-3" />
                               )}
@@ -893,7 +957,7 @@ export default function App() {
                             </button>
                             <button
                               onClick={() => handleStartEdit(msg)}
-                              className="hover:text-emerald-400 transition-colors flex items-center gap-1"
+                              className={`transition-colors flex items-center gap-1 ${theme === 'dark' ? 'hover:text-emerald-400' : 'hover:text-white'}`}
                               title="Edit Question and re-generate"
                             >
                               <Pencil className="w-3 h-3" />
@@ -910,7 +974,7 @@ export default function App() {
               {/* Assistant Response Turn */}
               {msg.role === 'assistant' && (
                 <div className="flex items-start gap-3.5 pr-4">
-                  <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0 mt-1">
+                  <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-500 shrink-0 mt-1">
                     <Compass className="w-4 h-4" />
                   </div>
 
@@ -918,11 +982,15 @@ export default function App() {
                     
                     {/* Refusal Notice Banner */}
                     {msg.is_refusal && (
-                      <div className="p-3 rounded-xl bg-amber-950/30 border border-amber-800/70 text-amber-200 text-xs flex items-start gap-2.5">
-                        <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                      <div className={`p-3 rounded-xl border text-xs flex items-start gap-2.5 ${
+                        theme === 'dark'
+                          ? 'bg-amber-950/30 border-amber-800/70 text-amber-200'
+                          : 'bg-amber-50 border-amber-300 text-amber-800'
+                      }`}>
+                        <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
                         <div>
-                          <p className="font-semibold text-amber-300">Grounding Guardrail Active</p>
-                          <p className="text-amber-200/90 mt-0.5">
+                          <p className={`font-semibold ${theme === 'dark' ? 'text-amber-300' : 'text-amber-900'}`}>Grounding Guardrail Active</p>
+                          <p className={`mt-0.5 ${theme === 'dark' ? 'text-amber-200/90' : 'text-amber-800/90'}`}>
                             The retrieved policy chunks do not verify this specific query. To prevent hallucinations, PolicyPilot strictly answers from validated passages.
                           </p>
                         </div>
@@ -930,52 +998,56 @@ export default function App() {
                     )}
 
                     {/* Rich Markdown Output (with Tables, Lists, Code, Mermaid) */}
-                    <div className="bg-slate-900/40 border border-slate-800/70 rounded-2xl p-4 md:p-5 text-sm text-slate-200 leading-relaxed shadow-sm">
+                    <div className={`border rounded-2xl p-4 md:p-5 text-sm leading-relaxed shadow-sm ${
+                      theme === 'dark'
+                        ? 'bg-slate-900/40 border-slate-800/70 text-slate-200'
+                        : 'bg-white border-slate-200 text-slate-800'
+                    }`}>
                       <ReactMarkdown
                         remarkPlugins={[remarkGfm]}
                         components={{
                           h1: ({ node, ...props }) => (
-                            <h1 className="text-lg font-bold text-white mt-4 mb-2 pb-1 border-b border-slate-800 flex items-center gap-2" {...props} />
+                            <h1 className={`text-lg font-bold mt-4 mb-2 pb-1 border-b flex items-center gap-2 ${theme === 'dark' ? 'text-white border-slate-800' : 'text-slate-900 border-slate-200'}`} {...props} />
                           ),
                           h2: ({ node, ...props }) => (
-                            <h2 className="text-base font-semibold text-slate-100 mt-3.5 mb-1.5" {...props} />
+                            <h2 className={`text-base font-semibold mt-3.5 mb-1.5 ${theme === 'dark' ? 'text-slate-100' : 'text-slate-900'}`} {...props} />
                           ),
                           h3: ({ node, ...props }) => (
-                            <h3 className="text-sm font-semibold text-slate-200 mt-3 mb-1" {...props} />
+                            <h3 className={`text-sm font-semibold mt-3 mb-1 ${theme === 'dark' ? 'text-slate-200' : 'text-slate-800'}`} {...props} />
                           ),
                           p: ({ node, ...props }) => (
-                            <p className="text-slate-300 leading-relaxed mb-3 last:mb-0" {...props} />
+                            <p className={`leading-relaxed mb-3 last:mb-0 ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`} {...props} />
                           ),
                           ul: ({ node, ...props }) => (
-                            <ul className="list-disc list-outside pl-5 mb-3 space-y-1.5 text-slate-300" {...props} />
+                            <ul className={`list-disc list-outside pl-5 mb-3 space-y-1.5 ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`} {...props} />
                           ),
                           ol: ({ node, ...props }) => (
-                            <ol className="list-decimal list-outside pl-5 mb-3 space-y-1.5 text-slate-300" {...props} />
+                            <ol className={`list-decimal list-outside pl-5 mb-3 space-y-1.5 ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`} {...props} />
                           ),
                           li: ({ node, ...props }) => (
-                            <li className="leading-relaxed pl-1 marker:text-emerald-400" {...props} />
+                            <li className="leading-relaxed pl-1 marker:text-emerald-500" {...props} />
                           ),
                           strong: ({ node, ...props }) => (
-                            <strong className="font-semibold text-white" {...props} />
+                            <strong className={`font-semibold ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`} {...props} />
                           ),
                           em: ({ node, ...props }) => (
-                            <em className="italic text-slate-200" {...props} />
+                            <em className={`italic ${theme === 'dark' ? 'text-slate-200' : 'text-slate-700'}`} {...props} />
                           ),
                           blockquote: ({ node, ...props }) => (
-                            <blockquote className="border-l-4 border-emerald-500/60 bg-emerald-950/20 px-3.5 py-2 my-2 rounded-r text-slate-300 italic" {...props} />
+                            <blockquote className={`border-l-4 border-emerald-500/60 px-3.5 py-2 my-2 rounded-r italic ${theme === 'dark' ? 'bg-emerald-950/20 text-slate-300' : 'bg-emerald-50 text-slate-700'}`} {...props} />
                           ),
                           // Exportable Table with CSV and Excel (.xlsx) download options
                           table: ({ node, children, ...props }) => (
                             <ExportableTable>{children}</ExportableTable>
                           ),
                           thead: ({ node, ...props }) => (
-                            <thead className="bg-slate-850 text-slate-200 uppercase tracking-wider font-semibold border-b border-slate-700" {...props} />
+                            <thead className={`uppercase tracking-wider font-semibold border-b ${theme === 'dark' ? 'bg-slate-850 text-slate-200 border-slate-700' : 'bg-slate-100 text-slate-700 border-slate-200'}`} {...props} />
                           ),
                           th: ({ node, ...props }) => (
-                            <th className="px-4 py-2.5 font-semibold text-emerald-400 bg-slate-900/90" {...props} />
+                            <th className={`px-4 py-2.5 font-semibold text-emerald-600 ${theme === 'dark' ? 'bg-slate-900/90 text-emerald-400' : 'bg-slate-100 text-emerald-700'}`} {...props} />
                           ),
                           td: ({ node, ...props }) => (
-                            <td className="px-4 py-2 text-slate-300 border-b border-slate-800/60 hover:bg-slate-800/30 transition-colors" {...props} />
+                            <td className={`px-4 py-2 border-b transition-colors ${theme === 'dark' ? 'text-slate-300 border-slate-800/60 hover:bg-slate-800/30' : 'text-slate-700 border-slate-100 hover:bg-slate-50'}`} {...props} />
                           ),
                           // Code & Mermaid Diagram Renderer
                           code: ({ node, inline, className, children, ...props }) => {
@@ -988,14 +1060,14 @@ export default function App() {
 
                             if (inline) {
                               return (
-                                <code className="bg-slate-800 text-emerald-300 px-1.5 py-0.5 rounded text-xs font-mono border border-slate-700/60" {...props}>
+                                <code className={`px-1.5 py-0.5 rounded text-xs font-mono border ${theme === 'dark' ? 'bg-slate-800 text-emerald-300 border-slate-700/60' : 'bg-slate-100 text-emerald-700 border-slate-200'}`} {...props}>
                                   {children}
                                 </code>
                               );
                             }
 
                             return (
-                              <pre className="bg-slate-950 border border-slate-800 rounded-lg p-3 my-2 overflow-x-auto text-xs font-mono text-slate-200">
+                              <pre className={`border rounded-lg p-3 my-2 overflow-x-auto text-xs font-mono ${theme === 'dark' ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-slate-900 border-slate-800 text-slate-100'}`}>
                                 <code {...props}>{children}</code>
                               </pre>
                             );
@@ -1007,9 +1079,9 @@ export default function App() {
 
                       {/* Interactive Citations Row */}
                       {msg.citations && msg.citations.length > 0 && (
-                        <div className="mt-4 pt-3 border-t border-slate-800/80">
-                          <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                        <div className={`mt-4 pt-3 border-t ${theme === 'dark' ? 'border-slate-800/80' : 'border-slate-200'}`}>
+                          <p className={`text-[11px] font-semibold uppercase tracking-wider mb-2 flex items-center gap-1.5 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
+                            <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
                             <span>Transparent Citations</span>
                           </p>
                           <div className="flex flex-wrap gap-1.5">
@@ -1022,11 +1094,15 @@ export default function App() {
                               return (
                                 <span
                                   key={cIdx}
-                                  className="inline-flex items-center gap-1.5 bg-slate-800/90 text-emerald-300 border border-slate-700/80 px-2.5 py-1 rounded-md text-xs font-mono shadow-sm"
+                                  className={`inline-flex items-center gap-1.5 border px-2.5 py-1 rounded-md text-xs font-mono shadow-sm ${
+                                    theme === 'dark'
+                                      ? 'bg-slate-800/90 text-emerald-300 border-slate-700/80'
+                                      : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                  }`}
                                   title={typeof cite === 'object' && cite.snippet ? cite.snippet : label}
                                 >
-                                  <span className="text-[10px] text-slate-400 font-semibold">{tag}</span>
-                                  <span className="text-slate-200">{label}</span>
+                                  <span className={`text-[10px] font-semibold ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>{tag}</span>
+                                  <span className={theme === 'dark' ? 'text-slate-200' : 'text-slate-800'}>{label}</span>
                                 </span>
                               );
                             })}
@@ -1037,34 +1113,42 @@ export default function App() {
 
                     {/* Audit Trail: Collapsible Retrieved Chunks & Score Inspector */}
                     {msg.retrieved_chunks && msg.retrieved_chunks.length > 0 && (
-                      <div className="border border-slate-800/70 rounded-xl overflow-hidden bg-slate-950/40">
+                      <div className={`border rounded-xl overflow-hidden ${theme === 'dark' ? 'border-slate-800/70 bg-slate-950/40' : 'border-slate-200 bg-white'}`}>
                         <button
                           onClick={() => toggleInspector(msg.id)}
-                          className="w-full px-3.5 py-2 text-xs text-slate-400 hover:text-slate-200 flex items-center justify-between hover:bg-slate-900/60 transition-colors"
+                          className={`w-full px-3.5 py-2 text-xs flex items-center justify-between transition-colors ${
+                            theme === 'dark'
+                              ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
+                              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                          }`}
                         >
                           <div className="flex items-center gap-2">
-                            <Layers className="w-3.5 h-3.5 text-blue-400" />
+                            <Layers className="w-3.5 h-3.5 text-blue-500" />
                             <span>Audit Trail ({msg.retrieved_chunks.length} Chunks Retrieved &bull; Top Score: {msg.retrieved_chunks[0]?.score?.toFixed(4)})</span>
                           </div>
                           {expandedInspectors[msg.id] ? (
-                            <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                            <ChevronDown className="w-3.5 h-3.5" />
                           ) : (
-                            <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                            <ChevronRight className="w-3.5 h-3.5" />
                           )}
                         </button>
 
                         {expandedInspectors[msg.id] && (
-                          <div className="p-3 border-t border-slate-800/80 space-y-2 bg-[#090d16]">
+                          <div className={`p-3 border-t space-y-2 ${theme === 'dark' ? 'border-slate-800/80 bg-[#090d16]' : 'border-slate-200 bg-slate-50'}`}>
                             {msg.retrieved_chunks.map((chunk, chIdx) => {
                               const isConfident = chunk.score >= 0.58;
                               return (
                                 <div
                                   key={chIdx}
-                                  className="p-2.5 rounded-lg border border-slate-800 bg-slate-900/70 text-xs space-y-1.5"
+                                  className={`p-2.5 rounded-lg border text-xs space-y-1.5 ${
+                                    theme === 'dark'
+                                      ? 'border-slate-800 bg-slate-900/70'
+                                      : 'border-slate-200 bg-white'
+                                  }`}
                                 >
                                   <div className="flex items-center justify-between text-[11px]">
                                     <div className="flex items-center gap-2">
-                                      <span className="font-semibold text-slate-300">
+                                      <span className={`font-semibold ${theme === 'dark' ? 'text-slate-300' : 'text-slate-800'}`}>
                                         #{chIdx + 1} &bull; {chunk.filename}
                                       </span>
                                       <span className="text-slate-500 font-mono text-[10px]">
@@ -1074,14 +1158,18 @@ export default function App() {
                                     <span
                                       className={`px-2 py-0.5 rounded font-mono text-[10px] font-semibold ${
                                         isConfident
-                                          ? 'bg-emerald-950 text-emerald-400 border border-emerald-800/80'
-                                          : 'bg-amber-950 text-amber-400 border border-amber-800/80'
+                                          ? theme === 'dark' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800/80' : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                          : theme === 'dark' ? 'bg-amber-950 text-amber-400 border border-amber-800/80' : 'bg-amber-100 text-amber-800 border border-amber-300'
                                       }`}
                                     >
                                       Score: {chunk.score?.toFixed(4)}
                                     </span>
                                   </div>
-                                  <p className="text-slate-400 font-mono text-[11px] bg-slate-950 p-2 rounded border border-slate-800/60 leading-relaxed whitespace-pre-wrap">
+                                  <p className={`font-mono text-[11px] p-2 rounded border leading-relaxed whitespace-pre-wrap ${
+                                    theme === 'dark'
+                                      ? 'bg-slate-950 text-slate-400 border-slate-800/60'
+                                      : 'bg-slate-50 text-slate-700 border-slate-200'
+                                  }`}>
                                     {chunk.text}
                                   </p>
                                 </div>
@@ -1102,7 +1190,7 @@ export default function App() {
                             const qText = msgIdx > 0 ? messages[msgIdx - 1]?.content : 'Policy Inquiry';
                             exportToPdf(qText, msg.content, msg.citations);
                           }}
-                          className="flex items-center gap-1 text-slate-400 hover:text-emerald-400 transition-colors"
+                          className={`flex items-center gap-1 transition-colors ${theme === 'dark' ? 'text-slate-400 hover:text-emerald-400' : 'text-slate-500 hover:text-emerald-600'}`}
                           title="Export answer and citations as PDF document"
                         >
                           <FileDown className="w-3.5 h-3.5" />
@@ -1111,12 +1199,12 @@ export default function App() {
 
                         <button
                           onClick={() => copyToClipboard(msg.content, msg.id)}
-                          className="flex items-center gap-1 text-slate-400 hover:text-slate-200 transition-colors"
+                          className={`flex items-center gap-1 transition-colors ${theme === 'dark' ? 'text-slate-400 hover:text-slate-200' : 'text-slate-500 hover:text-slate-800'}`}
                         >
                           {copiedId === msg.id ? (
                             <>
-                              <Check className="w-3 h-3 text-emerald-400" />
-                              <span className="text-emerald-400">Copied</span>
+                              <Check className="w-3 h-3 text-emerald-500" />
+                              <span className="text-emerald-500">Copied</span>
                             </>
                           ) : (
                             <>
@@ -1138,13 +1226,13 @@ export default function App() {
           {/* Loading Indicator Turn - Minimalist Claude-style animated loader */}
           {loading && (
             <div className="max-w-3xl mx-auto flex items-center gap-3 pr-4 animate-fade-in py-1">
-              <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+              <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-500 shrink-0">
                 <Compass className="w-4 h-4 animate-spin" />
               </div>
-              <div className="flex items-center gap-1.5 px-3 py-2 bg-slate-900/50 rounded-xl border border-slate-800/60">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-bounce [animation-delay:-0.3s]" />
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-bounce [animation-delay:-0.15s]" />
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-bounce" />
+              <div className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border ${theme === 'dark' ? 'bg-slate-900/50 border-slate-800/60' : 'bg-white border-slate-200 shadow-xs'}`}>
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-bounce [animation-delay:-0.3s]" />
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-bounce [animation-delay:-0.15s]" />
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-bounce" />
               </div>
             </div>
           )}
@@ -1153,13 +1241,17 @@ export default function App() {
         </div>
 
         {/* ================= BOTTOM PROMPT INPUT BAR (CLAUDE CODE STYLE - NO ATTACH BUTTON) ================= */}
-        <div className="p-4 md:p-6 border-t border-slate-800/80 bg-[#07090e]/95 backdrop-blur shrink-0">
+        <div className={`p-4 md:p-6 border-t backdrop-blur shrink-0 ${theme === 'dark' ? 'border-slate-800/80 bg-[#07090e]/95' : 'border-slate-200 bg-white/95'}`}>
           <div className="max-w-3xl mx-auto">
             
             {/* Input Container */}
             <form
               onSubmit={handleAsk}
-              className="relative bg-[#0d121f] border border-slate-700/80 focus-within:border-emerald-500/80 focus-within:ring-1 focus-within:ring-emerald-500/30 rounded-2xl shadow-xl transition-all"
+              className={`relative border focus-within:border-emerald-500 focus-within:ring-1 focus-within:ring-emerald-500/30 rounded-2xl shadow-xl transition-all ${
+                theme === 'dark'
+                  ? 'bg-[#0d121f] border-slate-700/80 text-slate-100'
+                  : 'bg-slate-50 border-slate-300 text-slate-800'
+              }`}
             >
               <textarea
                 ref={textareaRef}
@@ -1168,7 +1260,11 @@ export default function App() {
                 onKeyDown={handleKeyDown}
                 rows={2}
                 placeholder="Ask any policy question... (Press Enter to send, Shift+Enter for newline)"
-                className="w-full bg-transparent text-sm text-slate-100 placeholder-slate-500 px-4 pt-3.5 pb-11 resize-none focus:outline-none leading-relaxed"
+                className={`w-full bg-transparent text-sm px-4 pt-3.5 pb-11 resize-none focus:outline-none leading-relaxed ${
+                  theme === 'dark'
+                    ? 'text-slate-100 placeholder-slate-500'
+                    : 'text-slate-800 placeholder-slate-400'
+                }`}
               />
 
               {/* Input Toolbar */}
@@ -1177,11 +1273,15 @@ export default function App() {
                 {/* Active Scope filter badge (Attach button removed per request) */}
                 <div className="flex items-center gap-2">
                   {selectedDocId !== 'all' ? (
-                    <span className="bg-emerald-950/60 text-emerald-300 border border-emerald-800/80 text-[10px] px-2 py-0.5 rounded font-mono truncate max-w-[200px]">
+                    <span className={`text-[10px] px-2 py-0.5 rounded font-mono truncate max-w-[200px] border ${
+                      theme === 'dark'
+                        ? 'bg-emerald-950/60 text-emerald-300 border-emerald-800/80'
+                        : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                    }`}>
                       Filter: {documents.find(d => d.doc_id === selectedDocId)?.filename}
                     </span>
                   ) : (
-                    <span className="text-[11px] text-slate-500 font-mono">
+                    <span className={`text-[11px] font-mono ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
                       Searching all {documents.length} document{documents.length === 1 ? '' : 's'}
                     </span>
                   )}
@@ -1194,7 +1294,7 @@ export default function App() {
                   className={`p-2 rounded-xl text-white transition-all flex items-center justify-center ${
                     inputQuestion.trim() && !loading
                       ? 'bg-emerald-600 hover:bg-emerald-500 shadow-md shadow-emerald-900/40 cursor-pointer'
-                      : 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                      : 'bg-slate-300 dark:bg-slate-800 text-slate-500 cursor-not-allowed'
                   }`}
                   title="Ask Policy Question"
                 >
@@ -1203,7 +1303,7 @@ export default function App() {
               </div>
             </form>
 
-            <div className="flex items-center justify-between text-[11px] text-slate-500 mt-2 px-1">
+            <div className={`flex items-center justify-between text-[11px] mt-2 px-1 ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
               <span>PolicyPilot grounds answers in verified embeddings &bull; Zero Hallucination Guarantee</span>
               <span className="hidden sm:inline font-mono text-[10px]">Gemini 3.1 Flash Lite</span>
             </div>

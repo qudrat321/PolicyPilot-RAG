@@ -25,39 +25,42 @@
 
 ```mermaid
 flowchart TD
-    subgraph Client [Client Layer - Vercel / Cloudflare Pages]
-        UI[React + Vite Frontend\nInstant CDN Load - 0s Delay]
-        INSP[Retrieved-Chunk Inspector & Citations]
+    subgraph Client ["Client Layer - Vercel / Cloudflare Pages"]
+        UI["React + Vite Frontend<br/>Instant CDN Load"]
+        INSP["Retrieved-Chunk Inspector & Citations"]
     end
 
-    subgraph Gateway [API Gateway - Render Free Service]
-        API[FastAPI Router]
-        SEC[Pydantic v2 Validation & Rate Limiter]
-        DEDUP[SHA-256 File Deduplication]
+    subgraph Gateway ["API Gateway - Render Free Service"]
+        API["FastAPI Router"]
+        SEC["Pydantic v2 Validation & Rate Limiter"]
+        DEDUP["SHA-256 File Deduplication"]
     end
 
-    subgraph Ingestion [Ingestion & Tabular Pipeline]
-        EXT[Format-Specific Extractors\nPDF, DOCX, PPTX, HTML]
-        TBL[Table Extractor\nCSV & Multi-Sheet Excel openpyxl]
-        CHK[Header-Preserving Markdown Chunker]
+    subgraph Ingestion ["Ingestion & Tabular Pipeline"]
+        EXT["Format-Specific Extractors<br/>PDF, DOCX, PPTX, HTML"]
+        TBL["Table Extractor<br/>CSV & Multi-Sheet Excel openpyxl"]
+        CHK["Header-Preserving Markdown Chunker"]
     end
 
-    subgraph Retrieval [Retrieval & Grounding Engine]
+    subgraph Retrieval ["Retrieval & Grounding Engine"]
         RET["Top-k Hybrid Vector Retrieval"]
         DET["🛡️ Gate 1: Deterministic Refusal Threshold<br/>Score < 0.58 = 0 Token Refusal"]
         VAL["🛡️ Gate 3: Citation Cross-Validator"]
     end
 
-    subgraph CloudServices [Free Cloud Infrastructure]
+    subgraph CloudServices ["Free Cloud Infrastructure"]
         QD[("Qdrant Cloud Free<br/>Vector + Text Payload Storage")]
         GEM_EMB["Google gemini-embedding-001<br/>768-dim Embeddings"]
         GEM_LLM["Gemini 3.1 Flash Lite<br/>🛡️ Gate 2: Strict Grounding Contract"]
     end
 
     UI -->|REST API| API
-    API --> SEC --> DEDUP
-    DEDUP --> EXT & TBL
-    EXT & TBL --> CHK
+    API --> SEC
+    SEC --> DEDUP
+    DEDUP --> EXT
+    DEDUP --> TBL
+    EXT --> CHK
+    TBL --> CHK
     CHK -->|Batch Embed| GEM_EMB
     GEM_EMB -->|Vector + Payload| QD
 
@@ -89,7 +92,8 @@ flowchart TD
     TextExt --> Chunk["Sliding Window Text Chunker"]
     TableExt --> TableChunk["Header-Preserving Markdown Chunker<br/>+ Workbook Overview Summary"]
 
-    Chunk & TableChunk --> EmbedBatch["Batch Embed via gemini-embedding-001 (768-dim)"]
+    Chunk --> EmbedBatch["Batch Embed via gemini-embedding-001 (768-dim)"]
+    TableChunk --> EmbedBatch
     EmbedBatch --> UpsertQdrant[("Upsert to Qdrant Cloud with Full Text Payload")]
 
     UpsertQdrant --> Ready([Document Ready for Querying])
@@ -99,16 +103,17 @@ flowchart TD
     VectorSearch --> Gate1{"🛡️ Gate 1 Guardrail:<br/>Max Cosine Score >= 0.58?"}
 
     Gate1 -->|No| QuickRefuse["Deterministic Refusal (0 Tokens Spent)<br/>'Information not found in documents'"]
-    Gate1 -->|Yes| Gate2["🛡️ Gate 2 Guardrail:<br/>Build Grounded Prompt Envelope<br/>with Passages [1], [2]"]
+    Gate1 -->|Yes| Gate2["🛡️ Gate 2 Guardrail:<br/>Build Grounded Prompt Envelope<br/>with Passages #91;1#93;, #91;2#93;"]
     
     Gate2 --> GeminiCall["Gemini 3.1 Flash Lite Generation"]
-    GeminiCall --> Gate3{"🛡️ Gate 3 Guardrail:<br/>Validate Citation Tags [X]<br/>against Retrieved Chunks"}
+    GeminiCall --> Gate3{"🛡️ Gate 3 Guardrail:<br/>Validate Citation Tags #91;X#93;<br/>against Retrieved Chunks"}
 
     Gate3 -->|Fabricated Tags| StripInvalid["Filter & Strip Invalid Citation Tags"]
     Gate3 -->|Verified Citations| FormatResponse["Format Grounded Answer + Citations"]
     StripInvalid --> FormatResponse
 
-    QuickRefuse & FormatResponse --> UIResponse([Deliver to Multi-Turn React UI with Audit Inspector])
+    QuickRefuse --> UIResponse([Deliver to Multi-Turn React UI with Audit Inspector])
+    FormatResponse --> UIResponse
 ```
 
 ---

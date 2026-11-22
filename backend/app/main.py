@@ -39,7 +39,32 @@ async def health_check():
 # Mount built React frontend static files
 from pathlib import Path
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
-FRONTEND_DIST = Path("frontend/dist")
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+FRONTEND_DIST = BASE_DIR / "frontend" / "dist"
+if not FRONTEND_DIST.exists():
+    FRONTEND_DIST = Path("frontend/dist")
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon_ico():
+    fav_path = FRONTEND_DIST / "favicon.ico"
+    if fav_path.exists():
+        return FileResponse(fav_path)
+    pub_path = BASE_DIR / "frontend" / "public" / "favicon.ico"
+    if pub_path.exists():
+        return FileResponse(pub_path)
+    return FileResponse(fav_path)
+
+@app.get("/favicon.svg", include_in_schema=False)
+async def favicon_svg():
+    fav_svg = FRONTEND_DIST / "favicon.svg"
+    if fav_svg.exists():
+        return FileResponse(fav_svg, media_type="image/svg+xml")
+    pub_svg = BASE_DIR / "frontend" / "public" / "favicon.svg"
+    if pub_svg.exists():
+        return FileResponse(pub_svg, media_type="image/svg+xml")
+    return FileResponse(fav_svg, media_type="image/svg+xml")
+
 if FRONTEND_DIST.exists():
     app.mount("/", StaticFiles(directory=str(FRONTEND_DIST), html=True), name="frontend")

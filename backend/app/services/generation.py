@@ -1,7 +1,11 @@
-"""Grounded generation service using Gemini 1.5 / 2.0 / 3.1 Flash with citation grounding."""
+"""Grounded generation service using Gemini 1.5 / 2.0 / 3.1 Flash with citation grounding and multilingual alignment."""
+import re
+import time
+import logging
 from typing import List, Dict, Any, Tuple, Optional
 from google import genai
 from google.genai import types
+from google.genai import errors
 from app.config import settings
 from app.schemas import Citation
 from app.services.guardrails import (
@@ -10,6 +14,8 @@ from app.services.guardrails import (
     REFUSAL_MESSAGE,
     get_refusal_message,
 )
+
+logger = logging.getLogger(__name__)
 
 GENERATION_MODEL = "gemini-3.1-flash-lite"
 FALLBACK_MODEL = "gemini-3.5-flash-lite"
@@ -26,11 +32,14 @@ STRICT GROUNDING RULES:
 5. Never speculate, extrapolate, or use outside training knowledge.
 
 OUTPUT FORMATTING & USER INSTRUCTIONS:
-- LANGUAGE & SCRIPT MATCHING:
-  - If the user asks in Urdu (اردو), reply strictly in natural, professional Urdu (اردو) script, grounding every fact in the passages with citations [1], [2].
-  - If the user asks in Roman Urdu (Urdu written in English/Latin letters, e.g., 'kya rule hai', 'policy ka summary dein', 'leave kaisay milay gi'), reply strictly in natural, conversational Roman Urdu while retaining citations [1], [2].
-  - If the user asks in English, reply in English.
-  - Always mirror the user's language and script precisely.
+- LANGUAGE, SCRIPT & TONE ALIGNMENT:
+  - Mirror the User's Language, Script, and Tone: Always respond in the exact language, script, and conversational tone used by the user:
+    * If the user asks in English, reply in English.
+    * If the user asks in Roman Urdu (e.g. 'policy ka rule kya hai', 'chutti kaise milegi'), reply in natural, conversational Roman Urdu (e.g. 'Company policy ke mutabiq, annual leave... [1]').
+    * If the user asks in Urdu (اردو in Nastaliq script), reply strictly in natural, professional Urdu (اردو) script with citations [1], [2].
+    * If the user asks in Pashto (پښتو), reply strictly in natural, professional Pashto (پښتو) script with citations [1], [2].
+    * If the user asks in any other language, reply in that exact same language and script.
+  - Retain all citation bracketed numbers [1], [2] next to each factual statement regardless of target language.
 - TABLE REQUESTS: If the user asks for a table or matrix format (e.g. 'in table form', 'create a table'), format the response as a clean Markdown table with headers and alignment.
 - DIAGRAM / VISUAL / IMAGE REQUESTS: If the user asks for a diagram, flowchart, or visual representation (e.g. 'in diagram form', 'in image form', 'flowchart'), provide a valid, well-structured Mermaid diagram block (```mermaid ... ```) representing the policy flow or hierarchy.
 - SENTENCE & LENGTH CONSTRAINTS: If the user specifies an exact length or count (e.g. 'in exactly 2 sentences', 'in 3 bullet points', 'in one sentence', 'in 50 words'), strictly adhere to the exact constraint while still including citations [1].
@@ -73,11 +82,63 @@ def is_translation_or_reformat_request(question: str) -> bool:
     for t in triggers:
         if t in q:
             return True
-    if q in ["in urdu", "urdu", "roman urdu", "اردو میں", "اردو", "urdu please", "urdu translation"]:
+    if q in ["in urdu", "urdu", "roman urdu", "in pashto", "pashto", "اردو میں", "اردو", "پښتو کې", "پښتو", "urdu please", "urdu translation"]:
         return True
-    if "اردو میں" in question or "اوپر والا" in question or "ترجمہ" in question:
+    if "اردو میں" in question or "اوپر والا" in question or "ترجمہ" in question or "پښتو کې" in question:
         return True
     return False
+
+
+def is_non_english_or_roman_urdu(text: str) -> bool:
+    """Check if query is non-English (Urdu/Pashto/Arabic script, or Roman Urdu)."""
+    if not text:
+        return False
+    # Arabic / Urdu / Pashto unicode block
+    if re.search(r"[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]", text):
+        return True
+    # Roman Urdu common words
+    roman_urdu_words = {
+        "kya", "hai", "hain", "kaise", "kaisay", "kitna", "kitni", "kitnay",
+        "mein", "batao", "bataiye", "bataen", "chahiye", "chutti", "chhutti",
+        "miley", "milegi", "milega", "sakta", "sakti", "maloomat", "bhi",
+        "hoga", "hogi", "hota", "hoti", "karein", "par", "wali", "wala"
+    }
+    words = set(re.findall(r"\b\w+\b", text.lower()))
+    return len(words.intersection(roman_urdu_words)) >= 1
+
+
+def formulate_search_query_in_english(user_query: str) -> str:
+    """
+    Step 1 (Retrieve): If user asks in Urdu, Roman Urdu, Pashto, or non-English,
+    internally formulate the search query in English so Qdrant retrieves accurate English embeddings.
+    """
+    if not is_non_english_or_roman_urdu(user_query):
+        return user_query
+
+    client = get_genai_client()
+    try:
+        prompt = (
+            "You are an internal cross-lingual search query formulator for an enterprise vector database (Qdrant) "
+            "indexed with English policy documents.\n"
+            "Translate or reformulate the following user query (in Urdu, Roman Urdu, Pashto, or other language) "
+            "into a clean, concise 3 to 7 word English keyword query suitable for semantic vector retrieval.\n"
+            "Output ONLY the English search keywords, nothing else.\n\n"
+            f"User Query: {user_query}"
+        )
+        response = client.models.generate_content(
+            model=GENERATION_MODEL,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                temperature=0.0,
+                max_output_tokens=30,
+            ),
+        )
+        if response.text and response.text.strip():
+            translated = response.text.strip().replace('"', '').replace("'", "")
+            return translated
+    except Exception as e:
+        logger.warning(f"Search query English translation fallback: {e}")
+    return user_query
 
 
 def translate_or_reformat_previous_answer(
@@ -101,6 +162,8 @@ STRICT CONVERSION & GROUNDING RULES:
 1. SCRIPT & LANGUAGE ACCURACY:
    - If the user asks for Urdu (e.g. 'above in urdu', 'translate to urdu', 'urdu mein batao', 'اردو میں'), translate the answer accurately into formal, natural Urdu (اردو) script.
    - If the user asks for Roman Urdu (e.g. 'in roman urdu', 'roman urdu mein'), translate into natural conversational Roman Urdu.
+   - If the user asks for Pashto (e.g. 'in pashto', 'pashto mein', 'پښتو کې'), translate the answer accurately into formal, natural Pashto (پښتو) script.
+   - If the user asks for English, translate into clear, professional English.
    - If the user asks for a table or matrix (e.g. 'in table form', 'convert to table'), reformat the data into a clean Markdown table.
 2. PRESERVE CITATIONS: You MUST retain every bracketed citation tag (e.g. [1], [2], [3]) exactly where each factual claim or figure appears.
 3. NEVER extrapolate, add external assumptions, or remove verified facts.

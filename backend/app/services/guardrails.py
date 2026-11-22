@@ -7,17 +7,29 @@ from app.schemas import Citation
 REFUSAL_MESSAGE = "The provided documents do not contain sufficient information to answer this question."
 
 def get_refusal_message(question: str) -> str:
-    """Return refusal message matching the language and script of the user question."""
+    """Return refusal message matching the language and script of the user question (English, Urdu, Pashto, Roman Urdu)."""
     if not question:
         return REFUSAL_MESSAGE
     q = question.strip().lower()
-    # Check if Urdu script
-    if any('\u0600' <= char <= '\u06FF' for char in question):
+
+    # Check for Pashto characters
+    pashto_chars = {'ۍ', 'ې', 'ښ', 'ځ', 'څ', 'ږ', 'ڼ', 'ډ', 'ړ', 'ټ'}
+    if any(c in pashto_chars for c in question):
+        return "په وړاندې شوي اسنادو کې د دې پوښتنې ځوابولو لپاره کافي معلومات نشته."
+
+    # Check if Arabic / Urdu script
+    if re.search(r"[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]", question):
         return "فراہم کردہ دستاویزات میں اس سوال کا جواب دینے کے لیے کافی معلومات موجود نہیں ہیں۔"
+
     # Check if Roman Urdu
-    roman_urdu_words = ["kya", "hai", "hain", "kaise", "kaisay", "mein", "batao", "chutti", "miley", "milegi", "sakta", "sakti", "maloomat", "bhi"]
-    if any(w in q.split() for w in roman_urdu_words) or "urdu" in q:
+    roman_urdu_words = [
+        "kya", "hai", "hain", "kaise", "kaisay", "kitna", "kitni", "kitnay",
+        "mein", "batao", "bataiye", "chutti", "miley", "milegi", "sakta",
+        "sakti", "maloomat", "bhi", "hoga", "hogi", "hota", "hoti"
+    ]
+    if any(w in q.split() for w in roman_urdu_words) or "urdu" in q or "pashto" in q:
         return "Dastiyab documents mein is sawal ka jawab dainay ke liye kafi maloomat mojood nahi hain."
+
     return REFUSAL_MESSAGE
 
 

@@ -165,23 +165,40 @@ function convertTextToTableRows(question, answer, citations) {
   return rows;
 }
 
-function exportDataAsCsv(rows, scopeName = 'All Policy Documents', defaultFilename = 'policypilot_data') {
+function cleanMarkdownArtifacts(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/\*\*(.*?)\*\*/g, '$1')   // bold **text** -> text
+    .replace(/\*(.*?)\*/g, '$1')       // italic *text* -> text
+    .replace(/__(.*?)__/g, '$1')       // bold __text__ -> text
+    .replace(/_(.*?)_/g, '$1')         // italic _text_ -> text
+    .replace(/`([^`]+)`/g, '$1')       // inline code `text` -> text
+    .replace(/^[\*\-_•\s]+$/, '')      // lone asterisks, bullets, hyphens -> empty
+    .replace(/[\r\n]+/g, ' ')
+    .trim();
+}
+
+function exportDataAsCsv(rows, defaultFilename = 'policypilot_data') {
   if (!rows || !rows.length) return;
-  const headers = rows[0] || [];
-  const summaryLine1 = `Document Purpose: Policy data matrix detailing ${headers.slice(0, 5).join(', ')}.`;
-  const summaryLine2 = `Scope & Verification: Extracted from [${scopeName}] with 100% grounded zero-hallucination compliance.`;
-  const metadataRows = [
-    ['PolicyPilot RAG - Enterprise Policy Table Export'],
-    [`Exported: ${new Date().toLocaleString()} | Source Scope: ${scopeName} | Engine: Zero-Hallucination Vector Engine`],
-    [summaryLine1],
-    [summaryLine2],
-    ['']
-  ];
-  const fullCsvData = [...metadataRows, ...rows];
-  const csvContent = fullCsvData.map(row =>
-    row.map(cell => `"${String(cell || '').replace(/"/g, '""')}"`).join(',')
-  ).join('\n');
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const cleanRows = rows
+    .map(r => r.map(c => cleanMarkdownArtifacts(c)))
+    .filter(r => r.some(c => c && c.length > 0));
+  if (!cleanRows.length) return;
+
+  // RFC 4180 standard clean CSV: header row on row 1, data rows on row 2+
+  // No arbitrary metadata text rows at the top which corrupt Excel and pandas columns
+  const csvContent = cleanRows.map(row =>
+    row.map(cell => {
+      const str = String(cell ?? '').trim();
+      if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    }).join(',')
+  ).join('\r\n');
+
+  // Prepend \uFEFF (UTF-8 BOM) so Microsoft Excel opens non-ASCII characters & columns correctly
+  const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -192,38 +209,169 @@ function exportDataAsCsv(rows, scopeName = 'All Policy Documents', defaultFilena
 
 function exportDataAsExcel(rows, scopeName = 'All Policy Documents', sheetName = 'PolicyMatrix', defaultFilename = 'policypilot_data') {
   if (!rows || !rows.length) return;
-  const headers = rows[0] || [];
-  const summaryLine1 = `Document Purpose: Policy data matrix detailing ${headers.slice(0, 5).join(', ')}.`;
-  const summaryLine2 = `Scope & Verification: Extracted from [${scopeName}] with 100% grounded zero-hallucination compliance.`;
-  const metadataRows = [
-    ['PolicyPilot RAG - Enterprise Policy Data Table'],
-    [`Exported: ${new Date().toLocaleString()} | Source Scope: ${scopeName} | Engine: Zero-Hallucination Vector Engine`],
-    [summaryLine1],
-    [summaryLine2],
-    []
+  const cleanRows = rows
+    .map(r => r.map(c => cleanMarkdownArtifacts(c)))
+    .filter(r => r.some(c => c && c.length > 0));
+  if (!cleanRows.length) return;
+
+  const headers = cleanRows[0] || [];
+  const bodyRows = cleanRows.slice(1);
+  const colCount = Math.max(headers.length, 1);
+
+  const dateStr = new Date().toLocaleDateString();
+  const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  // Executive Header Banner rows (merged across all columns in Excel)
+  const bannerRow1 = ['PolicyPilot RAG — Verified Policy Data Table'];
+  const bannerRow2 = [`Source Scope: ${scopeName} | Verification: 100% Grounded | Date: ${dateStr} ${timeStr}`];
+  const blankRow = [];
+
+  const fullSheetData = [
+    bannerRow1,
+    bannerRow2,
+    blankRow,
+    headers,
+    ...bodyRows
   ];
-  const fullSheetData = [...metadataRows, ...rows];
+
   const ws = XLSX.utils.aoa_to_sheet(fullSheetData);
+
+  // Merge banner rows across all table columns
+  ws['!merges'] = [
+    { s: { r: 0, c: 0 }, e: { r: 0, c: colCount - 1 } },
+    { s: { r: 1, c: 0 }, e: { r: 1, c: colCount - 1 } }
+  ];
+
+  // Calculate column widths ONLY from the table rows (headers + data rows), NOT the merged banners
   const colWidths = [];
-  fullSheetData.forEach(row => {
-    row.forEach((cell, colIdx) => {
-      const len = cell ? String(cell).length : 12;
-      colWidths[colIdx] = Math.min(65, Math.max(colWidths[colIdx] || 14, len + 3));
+  for (let c = 0; c < colCount; c++) {
+    let maxLen = headers[c] ? String(headers[c]).length : 10;
+    bodyRows.forEach(row => {
+      const cellLen = row[c] ? String(row[c]).length : 0;
+      if (cellLen > maxLen) maxLen = cellLen;
     });
-  });
-  ws['!cols'] = colWidths.map(w => ({ wch: w }));
+    colWidths.push({ wch: Math.min(65, Math.max(16, maxLen + 4)) });
+  }
+  ws['!cols'] = colWidths;
+
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, sheetName);
   XLSX.writeFile(wb, `${defaultFilename}_${Date.now()}.xlsx`);
 }
 
+function drawTableGridInPdf(doc, rows, startCursorY, margin, contentWidth, pageHeight) {
+  if (!rows || !rows.length) return startCursorY;
+
+  // Clean all cells of Markdown artifacts and filter out any stray or empty artifact rows (e.g. lone '*')
+  const cleanRows = rows
+    .map(r => r.map(c => cleanMarkdownArtifacts(c)))
+    .filter(r => r.some(c => c && c.length > 0));
+
+  if (!cleanRows.length) return startCursorY;
+
+  const headers = cleanRows[0] || [];
+  const bodyRows = cleanRows.slice(1);
+  const numCols = Math.max(headers.length, 1);
+
+  // Compute proportional column widths based on text lengths
+  const colLengths = headers.map((h, cIdx) => {
+    let maxL = String(h || '').length;
+    bodyRows.forEach(r => {
+      const cellStr = String(r[cIdx] || '').trim();
+      if (cellStr.length > maxL) maxL = cellStr.length;
+    });
+    return Math.max(maxL, 8);
+  });
+  const totalL = colLengths.reduce((a, b) => a + b, 0);
+  let colWidths = colLengths.map(l => Math.max(50, (l / totalL) * contentWidth));
+  const sumW = colWidths.reduce((a, b) => a + b, 0);
+  colWidths = colWidths.map(w => (w / sumW) * contentWidth);
+
+  const drawHeader = (y) => {
+    doc.setFillColor(241, 245, 249); // slate-100
+    doc.rect(margin, y, contentWidth, 22, 'F');
+    doc.setDrawColor(203, 213, 225); // slate-300
+    doc.setLineWidth(0.5);
+    doc.rect(margin, y, contentWidth, 22, 'S');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(15, 23, 42);
+
+    let currentX = margin;
+    headers.forEach((h, cIdx) => {
+      const w = colWidths[cIdx];
+      const hLines = doc.splitTextToSize(String(h || '').toUpperCase(), w - 8);
+      doc.text(hLines[0] || '', currentX + 5, y + 14);
+      if (cIdx > 0) {
+        doc.line(currentX, y, currentX, y + 22);
+      }
+      currentX += w;
+    });
+    return y + 22;
+  };
+
+  let curY = drawHeader(startCursorY);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+
+  bodyRows.forEach((row, rIdx) => {
+    // Multi-line text wrapping for every cell in this row
+    const cellLinesArr = row.map((cell, cIdx) => {
+      const w = colWidths[cIdx] || (contentWidth / numCols);
+      const text = cleanMarkdownArtifacts(cell);
+      return doc.splitTextToSize(text, w - 10);
+    });
+
+    const maxLines = Math.max(...cellLinesArr.map(cl => cl.length), 1);
+    const rowHeight = maxLines * 11 + 8;
+
+    // Page break check
+    if (curY + rowHeight > pageHeight - margin - 25) {
+      doc.addPage();
+      curY = margin + 20;
+      curY = drawHeader(curY);
+    }
+
+    // Alternating row background
+    if (rIdx % 2 === 1) {
+      doc.setFillColor(248, 250, 252);
+      doc.rect(margin, curY, contentWidth, rowHeight, 'F');
+    }
+
+    // Outer row border
+    doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(0.5);
+    doc.rect(margin, curY, contentWidth, rowHeight, 'S');
+
+    // Draw all lines for each cell & vertical divider lines
+    let cellX = margin;
+    doc.setTextColor(51, 65, 85);
+    row.forEach((_, cIdx) => {
+      const w = colWidths[cIdx] || (contentWidth / numCols);
+      const lines = cellLinesArr[cIdx] || [];
+      lines.forEach((lineText, lIdx) => {
+        doc.text(lineText, cellX + 5, curY + 11 + (lIdx * 11));
+      });
+      if (cIdx > 0) {
+        doc.line(cellX, curY, cellX, curY + rowHeight);
+      }
+      cellX += w;
+    });
+
+    curY += rowHeight;
+  });
+
+  return curY;
+}
+
 function exportTableAsPdf(title, rows, scopeName = 'All Policy Documents') {
   if (!rows || !rows.length) return;
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
-  const margin = 38;
+  const margin = 54; // 20mm / 0.75in uniform margin
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
-  const maxLineWidth = pageWidth - margin * 2;
+  const contentWidth = pageWidth - margin * 2;
   let cursorY = margin;
 
   // 1. Enterprise Top Header Banner (Deep Navy + Emerald Accent)
@@ -252,73 +400,58 @@ function exportTableAsPdf(title, rows, scopeName = 'All Policy Documents') {
   doc.setTextColor(203, 213, 225);
   doc.text(`Date: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`, pageWidth - margin - 150, 45);
 
-  cursorY = 76;
+  cursorY = 78;
 
-  // 2. Executive Purpose & Document Scope Card (2 Lines)
+  // 2. Executive Purpose & Document Scope Card (Strict Containment & Auto Wrapping)
+  const cleanRows = rows
+    .map(r => r.map(c => cleanMarkdownArtifacts(c)))
+    .filter(r => r.some(c => c && c.length > 0));
+  const headers = cleanRows[0] || [];
+  const innerCardWidth = contentWidth - 24;
+  const summaryLine1 = `• Purpose: Policy data matrix detailing: ${headers.slice(0, 6).join(', ')}`;
+  const summaryLine2 = `• Scope & Verification: Validated strictly against repository [${scopeName}] with zero-hallucination vector guarantee.`;
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  const pLines = doc.splitTextToSize(summaryLine1, innerCardWidth);
+  const sLines = doc.splitTextToSize(summaryLine2, innerCardWidth);
+  const cardHeight = 22 + (pLines.length + sLines.length) * 12 + 10;
+
   doc.setFillColor(248, 250, 252);
   doc.setDrawColor(203, 213, 225);
   doc.setLineWidth(0.75);
-  doc.roundedRect(margin, cursorY, maxLineWidth, 44, 4, 4, 'FD');
+  doc.roundedRect(margin, cursorY, contentWidth, cardHeight, 4, 4, 'FD');
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
   doc.setTextColor(5, 150, 105);
-  doc.text('EXECUTIVE PURPOSE & DOCUMENT SCOPE', margin + 10, cursorY + 13);
+  doc.text('EXECUTIVE PURPOSE & DOCUMENT SCOPE', margin + 12, cursorY + 14);
 
-  const headers = rows[0] || [];
-  const summaryLine1 = `• Purpose: Policy data matrix detailing: ${headers.slice(0, 6).join(', ')}`;
-  const summaryLine2 = `• Scope: Validated strictly against repository [${scopeName}] with zero-hallucination vector guarantee.`;
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
   doc.setTextColor(51, 65, 85);
-  doc.text(summaryLine1, margin + 10, cursorY + 26);
-  doc.text(summaryLine2, margin + 10, cursorY + 38);
+  let cardCursor = cursorY + 27;
+  pLines.forEach(line => {
+    doc.text(line, margin + 12, cardCursor);
+    cardCursor += 12;
+  });
+  sLines.forEach(line => {
+    doc.text(line, margin + 12, cardCursor);
+    cardCursor += 12;
+  });
 
-  cursorY += 56;
+  cursorY += cardHeight + 18;
 
   // Table Title
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
+  doc.setFontSize(10.5);
   doc.setTextColor(15, 23, 42);
   doc.text(title || 'Policy Data Matrix', margin, cursorY);
-  cursorY += 14;
+  cursorY += 15;
 
-  const bodyRows = rows.slice(1);
-  const colCount = Math.max(1, headers.length);
-  const colWidth = maxLineWidth / colCount;
+  // Draw full grid table with auto-wrap and proportional columns
+  cursorY = drawTableGridInPdf(doc, cleanRows, cursorY, margin, contentWidth, pageHeight);
 
-  // Draw header row
-  doc.setFillColor(241, 245, 249);
-  doc.rect(margin, cursorY, maxLineWidth, 20, 'F');
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8);
-  doc.setTextColor(15, 23, 42);
-  headers.forEach((h, i) => {
-    doc.text(String(h || '').substring(0, 25), margin + (i * colWidth) + 4, cursorY + 13);
-  });
-  cursorY += 20;
-
-  // Draw data rows
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7.5);
-  bodyRows.forEach((row, rIdx) => {
-    if (cursorY > pageHeight - 45) {
-      doc.addPage();
-      cursorY = margin + 10;
-    }
-    if (rIdx % 2 === 1) {
-      doc.setFillColor(248, 250, 252);
-      doc.rect(margin, cursorY, maxLineWidth, 18, 'F');
-    }
-    doc.setTextColor(51, 65, 85);
-    row.forEach((cell, cIdx) => {
-      doc.text(String(cell || '').substring(0, 30), margin + (cIdx * colWidth) + 4, cursorY + 12);
-    });
-    doc.setDrawColor(226, 232, 240);
-    doc.line(margin, cursorY + 18, margin + maxLineWidth, cursorY + 18);
-    cursorY += 18;
-  });
-
+  // Footer on all pages
   const totalPages = doc.internal.getNumberOfPages();
   for (let i = 1; i <= totalPages; i++) {
     doc.setPage(i);
@@ -328,71 +461,223 @@ function exportTableAsPdf(title, rows, scopeName = 'All Policy Documents') {
     doc.text(
       'PolicyPilot RAG • Confidential Enterprise Compliance • Zero-Hallucination Vector Architecture',
       margin,
-      pageHeight - 16
+      pageHeight - 25
     );
-    doc.text(`Page ${i} of ${totalPages}`, pageWidth - margin - 45, pageHeight - 16);
+    doc.text(`Page ${i} of ${totalPages}`, pageWidth - margin - 45, pageHeight - 25);
   }
 
   doc.save(`policypilot_table_${Date.now()}.pdf`);
 }
 
-function handleExportExcelFromMessage(question, content, citations, scopeName) {
-  const tables = extractAllTablesFromContent(content);
-  if (tables.length > 0) {
-    const wb = XLSX.utils.book_new();
-    tables.forEach((tableRows, idx) => {
-      const headers = tableRows[0] || [];
-      const summaryLine1 = `Document Purpose: Policy data matrix detailing ${headers.slice(0, 5).join(', ')}.`;
-      const summaryLine2 = `Scope & Verification: Extracted from [${scopeName}] with 100% grounded zero-hallucination compliance.`;
-      const metadataRows = [
-        ['PolicyPilot RAG - Enterprise Policy Data Table'],
-        [`Exported: ${new Date().toLocaleString()} | Source Scope: ${scopeName} | Table ${idx + 1} of ${tables.length}`],
-        [summaryLine1],
-        [summaryLine2],
-        []
-      ];
-      const fullSheetData = [...metadataRows, ...tableRows];
-      const ws = XLSX.utils.aoa_to_sheet(fullSheetData);
-      const colWidths = [];
-      fullSheetData.forEach(row => {
-        row.forEach((cell, colIdx) => {
-          const len = cell ? String(cell).length : 12;
-          colWidths[colIdx] = Math.min(65, Math.max(colWidths[colIdx] || 14, len + 3));
-        });
+function parseDocumentBlocks(text) {
+  if (!text) return [];
+  const lines = text.split(/\r?\n/);
+  const blocks = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i].trim();
+
+    if (!line) {
+      i++;
+      continue;
+    }
+
+    // 1. Detect Markdown Table (| col1 | col2 |)
+    if (line.startsWith('|') && line.endsWith('|')) {
+      const nextLine = (lines[i + 1] || '').trim();
+      if (/^\|[-:\s|]+\|$/.test(nextLine)) {
+        const tableLines = [line];
+        i += 2; // skip header and separator
+        while (i < lines.length && lines[i].trim().startsWith('|') && lines[i].trim().endsWith('|')) {
+          tableLines.push(lines[i].trim());
+          i++;
+        }
+        const rawRows = tableLines.map(tLine =>
+          tLine.replace(/^\||\|$/g, '').split('|').map(c => cleanMarkdownArtifacts(c))
+        );
+        // Filter out empty rows or artifact rows containing only empty strings (e.g. lone '*')
+        const rows = rawRows.filter(r => r.some(c => c && c.length > 0));
+        if (rows.length >= 1) {
+          blocks.push({ type: 'table', rows });
+        }
+        continue;
+      }
+    }
+
+    // 2. Headings (# Heading or **Heading:**)
+    if (line.startsWith('#') || (line.startsWith('**') && line.endsWith('**') && line.length < 75)) {
+      const cleanHeading = line.replace(/^#+\s*/, '').replace(/\*\*/g, '').trim();
+      blocks.push({ type: 'heading', text: cleanHeading });
+      i++;
+      continue;
+    }
+
+    // 3. Bullets (*, -, +, \d+\.)
+    if (/^[\*\-\+]\s+/.test(line) || /^\d+\.\s+/.test(line)) {
+      const cleanBullet = line
+        .replace(/^[\*\-\+]\s+/, '')
+        .replace(/^\d+\.\s+/, '')
+        .replace(/\*\*(.*?)\*\*/g, '$1')
+        .replace(/\*(.*?)\*/g, '$1')
+        .trim();
+      blocks.push({ type: 'bullet', text: cleanBullet });
+      i++;
+      continue;
+    }
+
+    // 4. Regular Paragraphs
+    let paraText = line;
+    i++;
+    while (i < lines.length) {
+      const nextL = lines[i].trim();
+      if (!nextL || nextL.startsWith('|') || nextL.startsWith('#') || /^[\*\-\+]\s+/.test(nextL) || /^\d+\.\s+/.test(nextL)) {
+        break;
+      }
+      paraText += ' ' + nextL;
+      i++;
+    }
+    const cleanPara = paraText
+      .replace(/```[a-z]*\n?/g, '')
+      .replace(/\*\*(.*?)\*\*/g, '$1')
+      .replace(/\*(.*?)\*/g, '$1')
+      .trim();
+    if (cleanPara) {
+      blocks.push({ type: 'paragraph', text: cleanPara });
+    }
+  }
+
+  return blocks;
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function exportToWord(question, answer, citations, scopeName = 'All Policy Documents') {
+  const cleanQ = (question || 'Policy Inquiry').replace(/[\n\r]+/g, ' ').trim();
+  const blocks = parseDocumentBlocks(answer || '');
+  const dateStr = new Date().toLocaleDateString();
+  const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  // Convert parsed blocks to clean Word HTML
+  let contentHtml = '';
+  blocks.forEach(b => {
+    if (b.type === 'heading') {
+      contentHtml += `<h3 style="color:#0f172a;font-size:12pt;font-weight:bold;margin-top:16pt;margin-bottom:6pt;">${escapeHtml(b.text)}</h3>`;
+    } else if (b.type === 'bullet') {
+      contentHtml += `<div style="margin-left:18pt;margin-bottom:4pt;line-height:1.45;"><span style="color:#059669;font-weight:bold;margin-right:6pt;">&bull;</span>${escapeHtml(b.text)}</div>`;
+    } else if (b.type === 'paragraph') {
+      contentHtml += `<p style="margin:6pt 0;line-height:1.5;color:#334155;text-align:justify;">${escapeHtml(b.text)}</p>`;
+    } else if (b.type === 'table') {
+      const cleanRows = b.rows
+        .map(r => r.map(c => cleanMarkdownArtifacts(c)))
+        .filter(r => r.some(c => c && c.length > 0));
+      const headers = cleanRows[0] || [];
+      const bodyRows = cleanRows.slice(1);
+      let tableHtml = `<table style="width:100%;border-collapse:collapse;margin:12pt 0;font-size:9.5pt;font-family:Calibri,sans-serif;"><thead><tr style="background-color:#f1f5f9;">`;
+      headers.forEach(h => {
+        tableHtml += `<th style="border:1pt solid #cbd5e1;padding:7pt 9pt;text-align:left;color:#0f172a;font-weight:bold;">${escapeHtml(h.toUpperCase())}</th>`;
       });
-      ws['!cols'] = colWidths.map(w => ({ wch: w }));
-      const sheetName = tables.length === 1 ? 'PolicyMatrix' : `Table_${idx + 1}`;
-      XLSX.utils.book_append_sheet(wb, ws, sheetName);
-    });
-    XLSX.writeFile(wb, `policypilot_data_${Date.now()}.xlsx`);
-  } else {
-    const rows = convertTextToTableRows(question, content, citations);
-    exportDataAsExcel(rows, scopeName, 'PolicyFindings', 'policypilot_findings');
-  }
+      tableHtml += `</tr></thead><tbody>`;
+      bodyRows.forEach((row, rIdx) => {
+        const bg = rIdx % 2 === 1 ? 'background-color:#f8fafc;' : 'background-color:#ffffff;';
+        tableHtml += `<tr style="${bg}">`;
+        row.forEach(cell => {
+          tableHtml += `<td style="border:1pt solid #e2e8f0;padding:6pt 9pt;vertical-align:top;color:#334155;line-height:1.4;">${escapeHtml(cell)}</td>`;
+        });
+        tableHtml += `</tr>`;
+      });
+      tableHtml += `</tbody></table>`;
+      contentHtml += tableHtml;
+    }
+  });
+
+  // Word Document MSO HTML Wrapper
+  const wordDocumentHtml = `
+    <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+    <head>
+      <meta charset='utf-8'>
+      <title>PolicyPilot Report - ${escapeHtml(cleanQ)}</title>
+      <style>
+        @page { size: A4; margin: 20mm 20mm 20mm 20mm; mso-header-margin: 10mm; mso-footer-margin: 10mm; }
+        body { font-family: Calibri, 'Segoe UI', Arial, sans-serif; font-size: 10.5pt; color: #1e293b; line-height: 1.5; }
+        .banner { background-color: #0f172a; padding: 16pt 20pt; border-radius: 6pt; color: #ffffff; }
+        .banner-title { font-size: 18pt; font-weight: bold; margin: 0; color: #ffffff; }
+        .banner-accent { color: #10b981; }
+        .banner-sub { font-size: 8.5pt; color: #94a3b8; margin-top: 4pt; }
+        .meta-pill { font-size: 8pt; color: #10b981; font-weight: bold; text-align: right; }
+        .scope-box { background-color: #f8fafc; border: 1pt solid #cbd5e1; border-left: 4pt solid #10b981; padding: 10pt 14pt; margin: 14pt 0; border-radius: 4pt; }
+        .scope-title { font-size: 8.5pt; font-weight: bold; color: #059669; text-transform: uppercase; margin-bottom: 4pt; }
+        .scope-line { font-size: 9pt; color: #334155; margin: 3pt 0; }
+        .inquiry-label { font-size: 9pt; font-weight: bold; color: #475569; text-transform: uppercase; margin-top: 14pt; margin-bottom: 3pt; }
+        .inquiry-text { font-size: 10.5pt; color: #0f172a; margin-bottom: 12pt; line-height: 1.4; }
+        .findings-label { font-size: 9.5pt; font-weight: bold; color: #059669; text-transform: uppercase; margin-top: 16pt; margin-bottom: 8pt; border-bottom: 1pt solid #e2e8f0; padding-bottom: 4pt; }
+        .footer { font-size: 8pt; color: #94a3b8; border-top: 1pt solid #e2e8f0; margin-top: 26pt; padding-top: 8pt; text-align: center; }
+      </style>
+    </head>
+    <body>
+      <div class="banner">
+        <table style="width:100%;border:none;">
+          <tr>
+            <td style="border:none;">
+              <div class="banner-title">PolicyPilot <span class="banner-accent">RAG</span></div>
+              <div class="banner-sub">Enterprise Policy Compliance & Grounded Intelligence Report</div>
+            </td>
+            <td style="border:none;text-align:right;" class="meta-pill">
+              <div>VERIFICATION: 100% GROUNDED</div>
+              <div style="color:#cbd5e1;font-weight:normal;font-size:7.5pt;margin-top:2pt;">Date: ${dateStr} ${timeStr}</div>
+            </td>
+          </tr>
+        </table>
+      </div>
+
+      <div class="scope-box">
+        <div class="scope-title">Executive Purpose & Document Scope</div>
+        <div class="scope-line">&bull; <strong>Purpose:</strong> Provides verified, policy-grounded provisions addressing "${escapeHtml(cleanQ)}".</div>
+        <div class="scope-line">&bull; <strong>Scope & Verification:</strong> Validated strictly against repository [${escapeHtml(scopeName)}] with zero-hallucination vector guarantee.</div>
+      </div>
+
+      <div class="inquiry-label">Policy Inquiry:</div>
+      <div class="inquiry-text">${escapeHtml(cleanQ)}</div>
+
+      <div class="findings-label">Verified Policy Findings & Details:</div>
+      ${contentHtml}
+
+      <div class="footer">
+        PolicyPilot RAG &bull; Confidential Enterprise Compliance &bull; Zero-Hallucination Vector Architecture
+      </div>
+    </body>
+    </html>
+  `;
+
+  const blob = new Blob(['\uFEFF' + wordDocumentHtml], { type: 'application/msword;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `policypilot_report_${Date.now()}.doc`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
-function handleExportCsvFromMessage(question, content, citations, scopeName) {
-  const tables = extractAllTablesFromContent(content);
-  if (tables.length > 0) {
-    exportDataAsCsv(tables[0], scopeName, 'policypilot_data');
-  } else {
-    const rows = convertTextToTableRows(question, content, citations);
-    exportDataAsCsv(rows, scopeName, 'policypilot_findings');
-  }
-}
-
-function ExportableCSVBlock({ rawCsv, scopeName = 'All Policy Documents', theme, showTopExports = false }) {
+function ExportableCSVBlock({ rawCsv, scopeName = 'All Policy Documents', theme, showTopExports = true }) {
   const [viewMode, setViewMode] = useState('table'); // 'table' | 'raw'
   const rows = parseCsvToRows(rawCsv);
 
   const handleDownloadCSV = () => {
     if (!rows.length) return;
-    exportDataAsCsv(rows, scopeName, 'policypilot_data');
+    exportDataAsCsv(rows, 'policypilot_csv_matrix');
   };
 
   const handleDownloadExcel = () => {
     if (!rows.length) return;
-    exportDataAsExcel(rows, scopeName, 'PolicyMatrix', 'policypilot_data');
+    exportDataAsExcel(rows, scopeName, 'CSVMatrix', 'policypilot_csv_matrix');
   };
 
   const handleDownloadPdf = () => {
@@ -523,7 +808,7 @@ function ExportableCSVBlock({ rawCsv, scopeName = 'All Policy Documents', theme,
   );
 }
 
-function ExportableTable({ children, scopeName = 'All Policy Documents', theme = 'dark', showTopExports = false }) {
+function ExportableTable({ children, scopeName = 'All Policy Documents', theme = 'dark', showTopExports = true }) {
   const tableRef = useRef(null);
 
   const extractTableData = () => {
@@ -538,7 +823,7 @@ function ExportableTable({ children, scopeName = 'All Policy Documents', theme =
   const handleDownloadCSV = () => {
     const data = extractTableData();
     if (!data.length) return;
-    exportDataAsCsv(data, scopeName, 'policypilot_table');
+    exportDataAsCsv(data, 'policypilot_table');
   };
 
   const handleDownloadExcel = () => {
@@ -620,10 +905,10 @@ function ExportableTable({ children, scopeName = 'All Policy Documents', theme =
 
 const exportToPdf = (question, answer, citations, docScopeName = 'All Policy Documents') => {
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
-  const margin = 38;
+  const margin = 54; // Strict uniform 20mm (0.75in) page margin
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
-  const maxLineWidth = pageWidth - margin * 2;
+  const contentWidth = pageWidth - margin * 2;
   let cursorY = margin;
 
   // 1. Enterprise Top Header Banner (Deep Navy + Emerald Accent)
@@ -652,34 +937,48 @@ const exportToPdf = (question, answer, citations, docScopeName = 'All Policy Doc
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
   doc.setTextColor(16, 185, 129);
-  doc.text('VERIFICATION: 100% GROUNDED', pageWidth - margin - 150, 31);
+  doc.text('VERIFICATION: 100% GROUNDED', pageWidth - margin - 155, 31);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(203, 213, 225);
-  doc.text(`Date: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`, pageWidth - margin - 150, 45);
+  doc.text(`Date: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`, pageWidth - margin - 155, 45);
 
-  cursorY = 76;
+  cursorY = 78;
 
-  // 2. Executive Purpose & Document Scope Card (2 Lines requested)
+  // 2. Executive Purpose & Document Scope Card (Strict Text Wrapping & Dynamic Box Containment)
+  const innerCardWidth = contentWidth - 24;
+  const cleanQ = (question || 'Policy Inquiry').replace(/[\n\r]+/g, ' ').trim();
+  const summaryLine1 = `• Purpose: Provides verified, policy-grounded provisions addressing "${cleanQ}".`;
+  const summaryLine2 = `• Scope & Verification: Validated strictly against repository [${docScopeName}] with zero-hallucination vector guarantee.`;
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  const pLines = doc.splitTextToSize(summaryLine1, innerCardWidth);
+  const sLines = doc.splitTextToSize(summaryLine2, innerCardWidth);
+  const cardHeight = 22 + (pLines.length + sLines.length) * 12 + 10;
+
   doc.setFillColor(248, 250, 252); // slate-50
   doc.setDrawColor(203, 213, 225); // slate-300
   doc.setLineWidth(0.75);
-  doc.roundedRect(margin, cursorY, maxLineWidth, 44, 4, 4, 'FD');
+  doc.roundedRect(margin, cursorY, contentWidth, cardHeight, 4, 4, 'FD');
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
   doc.setTextColor(5, 150, 105); // emerald-600
-  doc.text('EXECUTIVE PURPOSE & DOCUMENT SCOPE', margin + 10, cursorY + 13);
+  doc.text('EXECUTIVE PURPOSE & DOCUMENT SCOPE', margin + 12, cursorY + 14);
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
   doc.setTextColor(51, 65, 85); // slate-700
-  const cleanQ = question.replace(/[\n\r]+/g, ' ').trim();
-  const summaryLine1 = `• Purpose: Provides verified, policy-grounded provisions addressing: "${cleanQ.substring(0, 95)}${cleanQ.length > 95 ? '...' : ''}"`;
-  const summaryLine2 = `• Scope: Validated strictly against repository [${docScopeName}] with zero-hallucination vector guarantee.`;
-  doc.text(summaryLine1, margin + 10, cursorY + 26);
-  doc.text(summaryLine2, margin + 10, cursorY + 38);
+  let cardCursor = cursorY + 27;
+  pLines.forEach(line => {
+    doc.text(line, margin + 12, cardCursor);
+    cardCursor += 12;
+  });
+  sLines.forEach(line => {
+    doc.text(line, margin + 12, cardCursor);
+    cardCursor += 12;
+  });
 
-  cursorY += 56;
+  cursorY += cardHeight + 18;
 
   // 3. User Inquiry Section
   doc.setFont('helvetica', 'bold');
@@ -691,92 +990,131 @@ const exportToPdf = (question, answer, citations, docScopeName = 'All Policy Doc
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9.5);
   doc.setTextColor(15, 23, 42); // slate-900
-  const qLines = doc.splitTextToSize(question, maxLineWidth);
-  doc.text(qLines, margin, cursorY);
-  cursorY += qLines.length * 13 + 12;
+  const qLines = doc.splitTextToSize(cleanQ, contentWidth);
+  qLines.forEach(line => {
+    if (cursorY > pageHeight - margin - 30) {
+      doc.addPage();
+      cursorY = margin + 20;
+    }
+    doc.text(line, margin, cursorY);
+    cursorY += 13.5;
+  });
+  cursorY += 8;
 
   // Divider Line
   doc.setDrawColor(226, 232, 240);
-  doc.line(margin, cursorY, pageWidth - margin, cursorY);
+  doc.line(margin, cursorY, margin + contentWidth, cursorY);
   cursorY += 16;
 
-  // 4. Grounded Policy Findings (Answer)
+  // 4. Grounded Policy Findings & Details (Strict Text Wrapping, Clean Bullets, Formatted Tables & Page-Break Handling)
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9.5);
   doc.setTextColor(5, 150, 105); // emerald-600
   doc.text('VERIFIED POLICY FINDINGS & DETAILS:', margin, cursorY);
   cursorY += 15;
 
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.setTextColor(30, 41, 59);
+  // Parse structured blocks: headings, bullets, paragraphs, and formatted tables
+  const blocks = parseDocumentBlocks(answer || '');
 
-  // Clean Markdown markers for clean PDF readability
-  const cleanAnswer = answer
-    .replace(/^#+\s+/gm, '')
-    .replace(/\*\*(.*?)\*\*/g, '$1')
-    .replace(/\*(.*?)\*/g, '$1')
-    .replace(/```[a-z]*\n?/g, '')
-    .trim();
-
-  const aLines = doc.splitTextToSize(cleanAnswer, maxLineWidth);
-  for (let line of aLines) {
-    if (cursorY > pageHeight - 45) {
-      doc.addPage();
-      cursorY = margin + 10;
-    }
-    doc.text(line, margin, cursorY);
-    cursorY += 13;
-  }
-
-  // 5. Verified Citations Section
-  if (citations && citations.length > 0) {
-    cursorY += 14;
-    if (cursorY > pageHeight - 65) {
-      doc.addPage();
-      cursorY = margin + 10;
-    }
-    doc.setDrawColor(226, 232, 240);
-    doc.line(margin, cursorY, pageWidth - margin, cursorY);
-    cursorY += 14;
-
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9);
-    doc.setTextColor(5, 150, 105);
-    doc.text('AUDIT TRAIL: VERIFIED SOURCE CITATIONS & PASSAGES:', margin, cursorY);
-    cursorY += 13;
-
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.setTextColor(100, 116, 139);
-
-    citations.forEach((c, idx) => {
-      if (cursorY > pageHeight - 35) {
+  blocks.forEach(b => {
+    // A. Heading Block
+    if (b.type === 'heading') {
+      if (cursorY > pageHeight - margin - 35) {
         doc.addPage();
-        cursorY = margin + 10;
+        cursorY = margin + 20;
       }
-      const tag = typeof c === 'object' && c.citation_id ? c.citation_id : `[${idx + 1}]`;
-      const docName = typeof c === 'object' ? (c.filename || 'Document') : c;
-      const section = typeof c === 'object' && c.page_or_section ? ` • ${c.page_or_section}` : '';
-      const citeStr = `${tag} ${docName}${section}`;
-      doc.text(citeStr, margin, cursorY);
-      cursorY += 11.5;
-    });
-  }
+      cursorY += 6;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9.5);
+      doc.setTextColor(15, 23, 42);
+      const hLines = doc.splitTextToSize(b.text, contentWidth);
+      hLines.forEach(hl => {
+        doc.text(hl, margin, cursorY);
+        cursorY += 13.5;
+      });
+      return;
+    }
 
-  // 6. Universal Header/Footer Stamp on Every Page
+    // B. Bullet List Items
+    if (b.type === 'bullet') {
+      const bulletLines = doc.splitTextToSize(b.text, contentWidth - 14);
+      bulletLines.forEach((bLine, bIdx) => {
+        if (cursorY > pageHeight - margin - 25) {
+          doc.addPage();
+          cursorY = margin + 20;
+        }
+        if (bIdx === 0) {
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(9);
+          doc.setTextColor(16, 185, 129); // emerald bullet symbol
+          doc.text('•', margin + 2, cursorY);
+        }
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        doc.setTextColor(30, 41, 59);
+        doc.text(bLine, margin + 14, cursorY);
+        cursorY += 13;
+      });
+      cursorY += 2;
+      return;
+    }
+
+    // C. Formatted Grid Table
+    if (b.type === 'table') {
+      if (cursorY > pageHeight - margin - 45) {
+        doc.addPage();
+        cursorY = margin + 20;
+      }
+      cursorY += 4;
+      cursorY = drawTableGridInPdf(doc, b.rows, cursorY, margin, contentWidth, pageHeight);
+      cursorY += 8;
+      return;
+    }
+
+    // D. Standard Body Paragraphs
+    if (b.type === 'paragraph') {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(30, 41, 59);
+
+      const paraLines = doc.splitTextToSize(b.text, contentWidth);
+      paraLines.forEach(line => {
+        if (cursorY > pageHeight - margin - 25) {
+          doc.addPage();
+          cursorY = margin + 20;
+        }
+        doc.text(line, margin, cursorY);
+        cursorY += 13.5;
+      });
+      cursorY += 5; // Paragraph spacing
+    }
+  });
+
+  // Universal Running Header & Footer on Every Page
   const totalPages = doc.internal.getNumberOfPages();
   for (let i = 1; i <= totalPages; i++) {
     doc.setPage(i);
+
+    // Subtle Running Header on Page 2+
+    if (i > 1) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.setTextColor(100, 116, 139);
+      doc.text('PolicyPilot RAG • Enterprise Verified Compliance Report', margin, 36);
+      doc.setDrawColor(226, 232, 240);
+      doc.line(margin, 42, margin + contentWidth, 42);
+    }
+
+    // Running Footer on Every Page
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.5);
     doc.setTextColor(148, 163, 184); // slate-400
     doc.text(
       'PolicyPilot RAG • Confidential Enterprise Compliance • Zero-Hallucination Vector Architecture',
       margin,
-      pageHeight - 16
+      pageHeight - 25
     );
-    doc.text(`Page ${i} of ${totalPages}`, pageWidth - margin - 45, pageHeight - 16);
+    doc.text(`Page ${i} of ${totalPages}`, pageWidth - margin - 50, pageHeight - 25);
   }
 
   doc.save(`policypilot_report_${Date.now()}.pdf`);
@@ -1614,9 +1952,9 @@ export default function App() {
                           blockquote: ({ node, ...props }) => (
                             <blockquote className={`border-l-4 border-emerald-500/60 px-3.5 py-2 my-2 rounded-r italic ${theme === 'dark' ? 'bg-emerald-950/20 text-slate-300' : 'bg-emerald-50 text-slate-900 border-emerald-600'}`} {...props} />
                           ),
-                          // Exportable Table with CSV and Excel (.xlsx) download options (shown on top only when multiple tables/CSVs exist)
+                          // Exportable Table with CSV, Excel (.xlsx), and PDF download options targeting this specific table
                           table: ({ node, children, ...props }) => (
-                            <ExportableTable scopeName={activeDocName} theme={theme} showTopExports={countTablesAndCsvInText(msg.content) > 1}>{children}</ExportableTable>
+                            <ExportableTable scopeName={activeDocName} theme={theme} showTopExports={true}>{children}</ExportableTable>
                           ),
                           thead: ({ node, ...props }) => (
                             <thead className={`uppercase tracking-wider font-semibold border-b ${theme === 'dark' ? 'bg-slate-850 text-slate-200 border-slate-700' : 'bg-slate-100 text-slate-900 border-slate-300'}`} {...props} />
@@ -1648,7 +1986,7 @@ export default function App() {
                             })());
 
                             if (isCsv) {
-                              return <ExportableCSVBlock rawCsv={rawText} scopeName={activeDocName} theme={theme} showTopExports={countTablesAndCsvInText(msg.content) > 1} />;
+                              return <ExportableCSVBlock rawCsv={rawText} scopeName={activeDocName} theme={theme} showTopExports={true} />;
                             }
 
                             if (inline) {
@@ -1830,50 +2168,29 @@ export default function App() {
                                 >
                                   <FileDown className="w-4 h-4 text-emerald-500 shrink-0" />
                                   <div>
-                                    <div className="font-semibold leading-tight">Export as PDF</div>
-                                    <div className={`text-[10px] ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>Executive report with audit trail</div>
+                                    <div className="font-semibold leading-tight">Export as PDF (.pdf)</div>
+                                    <div className={`text-[10px] ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>Executive report with formatted tables &amp; audit trail</div>
                                   </div>
                                 </button>
 
-                                {/* 2. Export Excel */}
+                                {/* 2. Export Word Document */}
                                 <button
                                   onClick={() => {
                                     setActiveExportMenuId(null);
                                     const msgIdx = messages.findIndex(m => m.id === msg.id);
                                     const qText = msgIdx > 0 ? messages[msgIdx - 1]?.content : 'Policy Inquiry';
-                                    handleExportExcelFromMessage(qText, msg.content, msg.citations, activeDocName);
+                                    exportToWord(qText, msg.content, msg.citations, activeDocName);
                                   }}
                                   className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-medium transition-colors text-left ${
                                     theme === 'dark'
-                                      ? 'hover:bg-slate-800/90 hover:text-emerald-300'
-                                      : 'hover:bg-slate-100 hover:text-emerald-800'
+                                      ? 'hover:bg-slate-800/90 hover:text-blue-300'
+                                      : 'hover:bg-slate-100 hover:text-blue-800'
                                   }`}
                                 >
-                                  <FileSpreadsheet className="w-4 h-4 text-emerald-500 shrink-0" />
+                                  <FileText className="w-4 h-4 text-blue-500 shrink-0" />
                                   <div>
-                                    <div className="font-semibold leading-tight">Export as Excel (.xlsx)</div>
-                                    <div className={`text-[10px] ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>Formatted spreadsheet matrix</div>
-                                  </div>
-                                </button>
-
-                                {/* 3. Export CSV */}
-                                <button
-                                  onClick={() => {
-                                    setActiveExportMenuId(null);
-                                    const msgIdx = messages.findIndex(m => m.id === msg.id);
-                                    const qText = msgIdx > 0 ? messages[msgIdx - 1]?.content : 'Policy Inquiry';
-                                    handleExportCsvFromMessage(qText, msg.content, msg.citations, activeDocName);
-                                  }}
-                                  className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-medium transition-colors text-left ${
-                                    theme === 'dark'
-                                      ? 'hover:bg-slate-800/90 hover:text-emerald-300'
-                                      : 'hover:bg-slate-100 hover:text-emerald-800'
-                                  }`}
-                                >
-                                  <Download className="w-4 h-4 text-emerald-500 shrink-0" />
-                                  <div>
-                                    <div className="font-semibold leading-tight">Export as CSV (.csv)</div>
-                                    <div className={`text-[10px] ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>Data matrix with summary header</div>
+                                    <div className="font-semibold leading-tight">Export as Word (.doc)</div>
+                                    <div className={`text-[10px] ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>Formatted Microsoft Word document with editable tables</div>
                                   </div>
                                 </button>
                               </div>

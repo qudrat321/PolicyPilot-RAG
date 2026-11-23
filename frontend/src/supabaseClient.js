@@ -75,6 +75,29 @@ export async function sendPasswordResetEmail(email) {
 }
 
 /**
+ * Update the password for the current authenticated user (e.g. after clicking reset link).
+ */
+export async function updateUserPassword(newPassword) {
+  if (!isSupabaseConfigured()) {
+    return { data: { user: { id: 'mock-user-1' } }, error: null };
+  }
+  const { data, error } = await supabase.auth.updateUser({
+    password: newPassword,
+  });
+  return { data, error };
+}
+
+/**
+ * Listen for auth events (e.g. PASSWORD_RECOVERY, SIGNED_IN, SIGNED_OUT).
+ */
+export function onAuthStateChange(callback) {
+  if (!isSupabaseConfigured()) {
+    return { data: { subscription: { unsubscribe: () => {} } } };
+  }
+  return supabase.auth.onAuthStateChange(callback);
+}
+
+/**
  * Sign in an existing user with email and password.
  */
 export async function signInUser(email, password) {

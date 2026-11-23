@@ -11,6 +11,7 @@ import {
   Trash2,
   CheckCircle2,
   AlertTriangle,
+  AlertCircle,
   ChevronDown,
   ChevronRight,
   Sparkles,
@@ -45,7 +46,8 @@ import {
   fetchUserChatHistory,
   saveChatTurnToDatabase,
   clearUserChatHistory,
-  isSupabaseConfigured
+  isSupabaseConfigured,
+  onAuthStateChange
 } from './supabaseClient';
 
 // Initialize mermaid for dark mode diagrams
@@ -911,14 +913,91 @@ export default function App() {
   const [editingMessageId, setEditingMessageId] = useState(null);
   const [editText, setEditText] = useState('');
 
+  // Auth notification state (e.g. Email verified, reset password prompt, auth errors)
+  const [authNotification, setAuthNotification] = useState(null);
+
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
+
+  // Auto-dismiss auth notification toast after 8 seconds
+  useEffect(() => {
+    if (authNotification) {
+      const timer = setTimeout(() => {
+        setAuthNotification(null);
+      }, 8000);
+      return () => clearTimeout(timer);
+    }
+  }, [authNotification]);
 
   useEffect(() => {
     checkHealth();
     loadDocuments();
     initUser();
+
+    // Inspect URL hash and query params for Supabase Auth redirect actions
+    const hash = window.location.hash || '';
+    const search = window.location.search || '';
+    const rawQuery = hash.startsWith('#') ? hash.substring(1) : search.startsWith('?') ? search.substring(1) : '';
+    const params = new URLSearchParams(rawQuery);
+
+    const type = params.get('type') || '';
+    const errorDesc = params.get('error_description') || '';
+
+    // 1. Password Recovery Flow (user clicked password reset link in email)
+    if (type === 'recovery' || hash.includes('type=recovery') || search.includes('type=recovery')) {
+      setAuthInitialMode('update_password');
+      setAuthModalOpen(true);
+      setAuthNotification({
+        type: 'info',
+        title: '🔑 Set Your New Password',
+        message: 'Please choose and confirm your new secure password below.'
+      });
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+    // 2. Email Confirmation Flow (user clicked verify email link)
+    else if (
+      type === 'signup' ||
+      type === 'email_change' ||
+      hash.includes('type=signup') ||
+      hash.includes('type=email_change')
+    ) {
+      setAuthNotification({
+        type: 'success',
+        title: '🎉 Email Verified Successfully!',
+        message: 'Your email has been confirmed. Welcome to PolicyPilot Enterprise!'
+      });
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+    // 3. Auth Link Error (e.g. expired or invalid token)
+    else if (errorDesc || hash.includes('error_description=')) {
+      setAuthNotification({
+        type: 'error',
+        title: '⚠️ Auth Link Notice',
+        message: decodeURIComponent((errorDesc || 'Link has expired or was already used.').replace(/\+/g, ' '))
+      });
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+
+    // 4. Supabase Real-time Auth State Change Listener
+    const { data: { subscription } } = onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setAuthInitialMode('update_password');
+        setAuthModalOpen(true);
+      } else if (event === 'SIGNED_IN') {
+        if (session?.user) {
+          setCurrentUser(session.user);
+          loadHistory(session.user.id);
+        }
+      } else if (event === 'SIGNED_OUT') {
+        setCurrentUser(null);
+        setChatHistory([]);
+      }
+    });
+
+    return () => {
+      subscription?.unsubscribe?.();
+    };
   }, []);
 
   const initUser = async () => {
@@ -2435,6 +2514,30 @@ export default function App() {
         </div>
 
       </main>
+
+      {/* Global Auth Status Notification Toast */}
+      {authNotification && (
+        <div className="fixed top-5 right-5 z-[9999] max-w-sm sm:max-w-md p-4 rounded-2xl border shadow-2xl backdrop-blur-md flex items-start gap-3 animate-fade-in transition-all bg-slate-900/95 border-emerald-500/40 text-slate-100">
+          {authNotification.type === 'success' ? (
+            <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+          ) : authNotification.type === 'error' ? (
+            <AlertCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+          ) : (
+            <ShieldCheck className="w-5 h-5 text-teal-400 shrink-0 mt-0.5" />
+          )}
+          <div className="flex-1 text-xs">
+            <p className="font-bold text-sm text-emerald-400 mb-0.5">{authNotification.title}</p>
+            <p className="leading-relaxed text-slate-300">{authNotification.message}</p>
+          </div>
+          <button
+            onClick={() => setAuthNotification(null)}
+            className="p-1 rounded-lg text-slate-400 hover:text-white transition-colors cursor-pointer"
+            title="Dismiss notification"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Authentication Modal (Email/Password & Google One-Click) */}
       <AuthModal

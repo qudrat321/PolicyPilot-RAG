@@ -89,7 +89,8 @@ import {
   signInUser,
   signUpUser,
   signInWithGoogleOAuth,
-  sendPasswordResetEmail
+  sendPasswordResetEmail,
+  updateUserPassword
 } from '../supabaseClient';
 
 export default function AuthModal({
@@ -220,6 +221,33 @@ export default function AuthModal({
             'Password reset link dispatched! Please check your email inbox and spam folder.'
           );
         }
+      } else if (mode === 'update_password') {
+        if (!password) {
+          setErrorMsg('Please enter a new password.');
+          setLoading(false);
+          return;
+        }
+        if (password.length < 6) {
+          setErrorMsg('Password must be at least 6 characters.');
+          setLoading(false);
+          return;
+        }
+        if (password !== confirmPassword) {
+          setErrorMsg('Passwords do not match. Please verify your confirmation password.');
+          setLoading(false);
+          return;
+        }
+
+        const { data, error } = await updateUserPassword(password);
+        if (error) {
+          setErrorMsg(error.message);
+        } else {
+          setSuccessMsg('Password updated successfully! Welcome back to PolicyPilot.');
+          setTimeout(() => {
+            onAuthSuccess(data?.user);
+            onClose();
+          }, 1000);
+        }
       }
     } catch (err) {
       setErrorMsg('An unexpected error occurred. Please try again.');
@@ -309,10 +337,19 @@ export default function AuthModal({
                 </p>
               </>
             )}
+
+            {mode === 'update_password' && (
+              <>
+                <h2 className="text-lg sm:text-xl font-bold tracking-tight">Set New Password</h2>
+                <p className={`text-xs mt-0.5 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
+                  Enter your new secure password to restore access to your account.
+                </p>
+              </>
+            )}
           </div>
 
           {/* Mode Switcher Tabs (Login / Register) */}
-          {mode !== 'forgot_password' && (
+          {mode !== 'forgot_password' && mode !== 'update_password' && (
             <div
               className={`flex rounded-xl p-1 mb-4 border ${
                 theme === 'dark' ? 'bg-slate-900/90 border-slate-800' : 'bg-slate-100 border-slate-200'
@@ -452,27 +489,96 @@ export default function AuthModal({
               </div>
             )}
 
-            {/* EMAIL (Full width in all modes) */}
-            <div>
-              <label className={`block text-[11px] font-semibold mb-1 ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>
-                Email Address <span className="text-emerald-500">*</span>
-              </label>
-              <div className="relative flex items-center">
-                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="name@organization.com"
-                  className={`w-full pl-10 pr-3 py-2 text-xs rounded-xl border focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-colors ${
-                    theme === 'dark'
-                      ? 'bg-slate-900/90 border-slate-700 text-slate-100 placeholder-slate-500'
-                      : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
-                  }`}
-                />
+            {/* EMAIL (Full width in login, register, and forgot_password modes) */}
+            {mode !== 'update_password' && (
+              <div>
+                <label className={`block text-[11px] font-semibold mb-1 ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>
+                  Email Address <span className="text-emerald-500">*</span>
+                </label>
+                <div className="relative flex items-center">
+                  <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="name@organization.com"
+                    className={`w-full pl-10 pr-3 py-2 text-xs rounded-xl border focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-colors ${
+                      theme === 'dark'
+                        ? 'bg-slate-900/90 border-slate-700 text-slate-100 placeholder-slate-500'
+                        : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
+                    }`}
+                  />
+                </div>
               </div>
-            </div>
+            )}
+
+            {/* UPDATE PASSWORD FIELDS */}
+            {mode === 'update_password' && (
+              <div className="space-y-3">
+                <div>
+                  <label className={`block text-[11px] font-semibold mb-1 ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>
+                    New Password <span className="text-emerald-500">*</span>
+                  </label>
+                  <div className="relative flex items-center">
+                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      required
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Min. 6 chars"
+                      className={`w-full pl-10 pr-10 py-2 text-xs rounded-xl border focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-colors ${
+                        theme === 'dark'
+                          ? 'bg-slate-900/90 border-slate-700 text-slate-100 placeholder-slate-500'
+                          : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
+                      }`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(prev => !prev)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-emerald-400 transition-colors p-0.5 cursor-pointer"
+                      title={showPassword ? 'Hide password' : 'View password'}
+                      aria-label={showPassword ? 'Hide password' : 'View password'}
+                      tabIndex={-1}
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className={`block text-[11px] font-semibold mb-1 ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>
+                    Confirm New Password <span className="text-emerald-500">*</span>
+                  </label>
+                  <div className="relative flex items-center">
+                    <KeyRound className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                    <input
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      required
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="Re-enter new password"
+                      className={`w-full pl-10 pr-10 py-2 text-xs rounded-xl border focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-colors ${
+                        theme === 'dark'
+                          ? 'bg-slate-900/90 border-slate-700 text-slate-100 placeholder-slate-500'
+                          : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
+                      }`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(prev => !prev)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-emerald-400 transition-colors p-0.5 cursor-pointer"
+                      title={showConfirmPassword ? 'Hide password' : 'View password'}
+                      aria-label={showConfirmPassword ? 'Hide password' : 'View password'}
+                      tabIndex={-1}
+                    >
+                      {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* PASSWORD SECTION (Login mode) */}
             {mode === 'login' && (
@@ -603,6 +709,8 @@ export default function AuthModal({
                 <span>Sign In to PolicyPilot</span>
               ) : mode === 'register' ? (
                 <span>Create Enterprise Account</span>
+              ) : mode === 'update_password' ? (
+                <span>Update Password & Continue</span>
               ) : (
                 <span>Send Password Reset Link</span>
               )}
@@ -610,7 +718,7 @@ export default function AuthModal({
           </form>
 
           {/* FORGOT PASSWORD: Back to Sign In */}
-          {mode === 'forgot_password' && (
+          {(mode === 'forgot_password' || mode === 'update_password') && (
             <div className="mt-3 text-center">
               <button
                 type="button"
@@ -630,7 +738,7 @@ export default function AuthModal({
           )}
 
           {/* GOOGLE SIGN IN (for login and register) */}
-          {mode !== 'forgot_password' && (
+          {mode !== 'forgot_password' && mode !== 'update_password' && (
             <>
               {/* Divider */}
               <div className="relative flex items-center justify-center my-3.5">

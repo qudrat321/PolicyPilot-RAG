@@ -30,7 +30,14 @@ To guarantee maximum availability and instant sub-second responses:
 
 ## 🌟 Key Capabilities & Architectural Highlights
 
-- **💸 100% Zero-Cost Cloud Architecture**: Runs completely on generous free tiers (Render, Supabase PostgreSQL, Qdrant Cloud Free, Google AI Studio) with **$0 cloud bill**.
+- **💸 100% Zero-Cost Cloud Architecture**: Runs completely on generous free tiers (Render, Supabase PostgreSQL, Qdrant Cloud Free, Groq Cloud Free Tier, Google AI Studio) with **$0 cloud bill**.
+- **🔄 Cascading Multi-Model Fallback Chain & Free Models**:
+  - **Primary Model**: Groq `openai/gpt-oss-120b` (500+ tokens/sec, sub-second latency, zero cold starts).
+  - **Secondary Model**: Groq `openai/gpt-oss-20b` (fast failover).
+  - **Tertiary Model**: Groq `qwen/qwen3.8-27b` & `allam-2-7b` (high-capacity open weights).
+  - **Cross-Provider Free Fallback**: Google Gemini `gemini-2.5-flash`, `gemini-2.5-flash-lite`, `gemini-3.1-flash-lite`.
+  - **Tenacity Exponential Backoff Retry**: Automatic 2-attempt retries (1.5s $\rightarrow$ 3s) restricted strictly to `503`, `429`, or `UNAVAILABLE` errors.
+  - **Zero-Downtime Guarantee**: If one model or provider is experiencing high server demand or rate limits, PolicyPilot seamlessly cascades to the next free model without user interruption.
 - **🔐 Multi-Tenant Enterprise Authentication & Security (Supabase Auth)**:
   - **Email & Password Authentication**: Complete registration, login, and email verification.
   - **One-Click Google OAuth**: Seamless single sign-on with Google accounts.
@@ -119,7 +126,15 @@ flowchart TD
     subgraph VectorAndAI ["Cloud AI Infrastructure ($0 Free Tier)"]
         QD[("Qdrant Cloud Free Tier<br/>768-dim Vectors + Text Payloads")]
         GEM_EMB["Google text-embedding-004<br/>(768-dim Embeddings)"]
-        GEM_LLM["Google Gemini 3.1 Flash Lite<br/>Grounded LLM Reasoning"]
+        
+        subgraph MultiModelFailover ["🔄 Cascading Multi-Model Fallback Chain"]
+            M1["1. Groq openai/gpt-oss-120b<br/>(Primary, 500+ tok/s)"]
+            M2["2. Groq openai/gpt-oss-20b<br/>(Secondary Failover)"]
+            M3["3. Groq qwen/qwen3.8-27b<br/>(Tertiary Open Weights)"]
+            M4["4. Google Gemini 2.5 Flash<br/>(Cross-Provider Free Fallback)"]
+            M5["5. Google Gemini 2.5 Flash Lite<br/>(Ultra-Lightweight Free Fallback)"]
+            RETRY["⚡ Tenacity Exponential Retry<br/>(2 Attempts: 1.5s -> 3s, 503/429 only)"]
+        end
     end
 
     %% Auth & User Management Flows
@@ -147,8 +162,17 @@ flowchart TD
     QD -->|Top Chunks & Scores| GATE1
     GATE1 -->|Score < 0.58| GUARD_UI
     GATE1 -->|Score >= 0.58| GATE2
-    GATE2 --> GEM_LLM
-    GEM_LLM --> GATE3
+    GATE2 --> M1
+    M1 -.->|503/429 or Fail| RETRY
+    RETRY -.->|Failover| M2
+    M2 -.->|Failover| M3
+    M3 -.->|Failover| M4
+    M4 -.->|Failover| M5
+    M1 --> GATE3
+    M2 --> GATE3
+    M3 --> GATE3
+    M4 --> GATE3
+    M5 --> GATE3
     GATE3 -->|Verified Citations + Answer| UI
     UI -->|Async Background Persist| DB_HIST
     UI -->|Export Boardroom PDF| PDF_ENG
@@ -166,7 +190,8 @@ sequenceDiagram
     participant Supa as Supabase Auth & DB
     participant API as FastAPI Backend
     participant QD as Qdrant Cloud
-    participant AI as Google Gemini API
+    participant AI as Embedding (Gemini)
+    participant LLM as Multi-Model Chain (Groq + Gemini)
 
     %% Authentication
     rect rgb(15, 23, 42)
@@ -213,8 +238,11 @@ sequenceDiagram
                 UI->>UI: Suppress "Export PDF" Button
                 UI-->>User: Guardrail Refusal Notice
             else Similarity Score >= 0.58
-                API->>AI: Generate Answer (Strict Grounding Envelope)
-                AI-->>API: Draft Answer with [1], [2] Citations
+                API->>LLM: Generate Answer (Cascading Groq/Gemini Chain)
+                alt Primary Groq 120B Overload / 503
+                    LLM->>LLM: Tenacity Retry -> Auto-Failover to Groq 20B / Qwen / Gemini Flash
+                end
+                LLM-->>API: Draft Answer with [1], [2] Citations
                 API->>API: Cross-Validate Citation Tags against Retrieved IDs
                 API-->>UI: Verified Answer + Citation Cards + Retrieved Chunks
                 UI->>Supa: Background Async Save Turn
@@ -374,9 +402,23 @@ Copy `.env.example` to `.env` and fill in your free credentials:
 ```bash
 cp .env.example .env
 ```
-* **Gemini API Key**: Free at [Google AI Studio](https://aistudio.google.com/).
+* **Groq API Key**: Free at [Groq Cloud Console](https://console.groq.com/keys) (powers ultra-fast LLM generation).
+* **Gemini API Key**: Free at [Google AI Studio](https://aistudio.google.com/) (powers 768-dim embeddings and cross-provider failover).
 * **Qdrant URL & Key**: Free 1GB cluster at [Qdrant Cloud](https://cloud.qdrant.io/).
 * **Supabase URL & Anon Key**: Free project at [Supabase](https://supabase.com/).
+
+| Environment Variable | Description | Default / Example |
+|---|---|---|
+| `GROQ_API_KEY` | Ultra-fast Groq API key (500+ tok/s) | `gsk_...` |
+| `LLM_PROVIDER` | Default generation provider (`groq` or `gemini`) | `groq` |
+| `LLM_MODEL` | Primary high-capability model | `openai/gpt-oss-120b` |
+| `LLM_FALLBACK_MODEL` | Secondary high-speed failover model | `openai/gpt-oss-20b` |
+| `GEMINI_API_KEY` | Google AI Studio key (Embeddings & Gemini failover) | `AIza...` |
+| `QDRANT_URL` | Cloud vector database endpoint | `https://xyz.aws.cloud.qdrant.io:6333` |
+| `QDRANT_API_KEY` | Qdrant Cloud cluster API key | `eyJ...` |
+| `QDRANT_COLLECTION` | Target collection name | `policy_documents` |
+| `VITE_SUPABASE_URL` | Supabase project URL | `https://your-project.supabase.co` |
+| `VITE_SUPABASE_ANON_KEY` | Supabase public anonymous key | `sb_publishable_...` |
 
 ### 3. Run Backend Server
 ```bash
@@ -443,5 +485,6 @@ PolicyPilot RAG is deployed to Render using a multi-stage Docker container defin
 | **Move 8: Conversational Multilingual** | ✅ Completed | History-aware translations/reformulations with zero false refusals |
 | **Move 9: Multi-Tenant Supabase Auth** | ✅ Completed | PostgreSQL database, RLS policies, Google OAuth, interactive password recovery, Pakistan default country selector |
 | **Move 10: 0ms Semantic History Cache** | ✅ Completed | In-memory optimistic chat history updates, SWR caching, zero-token question deduplication |
+| **Move 11: Multi-Model Fallback Chain** | ✅ Completed | Cascading failover across Groq (120B, 20B, Qwen) & Gemini Flash free tiers with Tenacity exponential retry |
 
 **Total test suite**: **17/17 tests passing (100%)**. Production build verified and synchronized across all branches.

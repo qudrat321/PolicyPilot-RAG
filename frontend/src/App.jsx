@@ -1249,16 +1249,22 @@ export default function App() {
         body: JSON.stringify(payload),
       });
 
-      const data = await res.json();
+      let data = {};
+      try {
+        data = await res.json();
+      } catch (jsonErr) {
+        // Fallback if server returned plain text (e.g. 500 / 502 / 504 from proxy)
+        data = { detail: `The AI service is temporarily unavailable (${res.status}). Please try again in a moment.` };
+      }
 
       // Clean HTTP 503 or server error handling - never leak raw provider errors
       if (!res.ok) {
-        const errorDetail = data.detail || 'The AI model is busy. Please try again in a few seconds.';
+        const errorDetail = data?.detail || 'The AI model is busy. Please try again in a few seconds.';
         const assistantMessage = {
           id: (Date.now() + 1).toString(),
           role: 'assistant',
           content: errorDetail,
-          is_refusal: false,
+          is_refusal: false, // Server/AI errors are NOT policy refusals
           citations: [],
           retrieved_chunks: [],
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -1300,11 +1306,12 @@ export default function App() {
       // Background sync to database
       saveChatTurnToDatabase(targetUserId, query, data.answer, data.citations, data.is_refusal).catch(console.warn);
     } catch (err) {
+      console.error('Ask request error:', err);
       const errorMessage = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
         content: '⚠️ Failed to connect to the backend server. Please verify the backend is running.',
-        is_refusal: true,
+        is_refusal: false, // CRITICAL: Never flag server connection failures as a policy grounding refusal!
         citations: [],
         retrieved_chunks: [],
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),

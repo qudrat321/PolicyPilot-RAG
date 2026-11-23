@@ -9,6 +9,14 @@ services:
     envVars:
       - key: GEMINI_API_KEY
         sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: LLM_PROVIDER
+        value: groq
+      - key: LLM_MODEL
+        value: openai/gpt-oss-120b
+      - key: LLM_FALLBACK_MODEL
+        value: openai/gpt-oss-20b
       - key: QDRANT_URL
         sync: false
       - key: QDRANT_API_KEY

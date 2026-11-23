@@ -237,16 +237,20 @@ async def ask_policy_question(payload: AskRequest):
             history=payload.history,
         )
     except AIModelOverloadError as exc:
-        # Catch custom overload error after tenacity retries and fallback failover
+        # Catch custom overload error after tenacity retries and multi-model failover
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="The AI model is busy. Please try again in a few seconds.",
         )
     except Exception as exc:
         err_msg = str(exc)
-        if any(w in err_msg.lower() for w in ["503", "unavailable", "high demand", "429", "overloaded", "quota"]):
+        logger.error(f"Unhandled error in ask_policy_question: {err_msg}", exc_info=True)
+        if any(w in err_msg.lower() for w in ["503", "unavailable", "high demand", "429", "overloaded", "quota", "groq", "gemini", "timeout", "connect", "illegal header"]):
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="The AI model is busy. Please try again in a few seconds.",
             )
-        raise exc
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred while generating the answer: {err_msg}",
+        )

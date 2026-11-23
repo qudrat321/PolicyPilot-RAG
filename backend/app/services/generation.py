@@ -61,9 +61,12 @@ def _call_groq(
     max_tokens: int = 1500,
 ) -> str:
     """Execute chat completion using Groq API with low latency and high reliability."""
+    if not settings.groq_api_key or not settings.groq_api_key.strip():
+        raise ValueError("GROQ_API_KEY is not configured.")
+
     url = "https://api.groq.com/openai/v1/chat/completions"
     headers = {
-        "Authorization": f"Bearer {settings.groq_api_key}",
+        "Authorization": f"Bearer {settings.groq_api_key.strip()}",
         "Content-Type": "application/json",
         "User-Agent": "PolicyPilot-RAG/1.0",
     }
@@ -93,6 +96,9 @@ def _call_gemini(
     max_tokens: int = 1500,
 ) -> str:
     """Execute chat completion using Google GenAI SDK."""
+    if not settings.gemini_api_key or not settings.gemini_api_key.strip():
+        raise ValueError("GEMINI_API_KEY is not configured.")
+
     client = get_genai_client()
     config = types.GenerateContentConfig(
         system_instruction=system_prompt,
@@ -117,14 +123,13 @@ def _execute_model_with_tenacity_retry(
 ) -> str:
     """
     Wrap model execution with tenacity retry:
-    - 5 attempts maximum
-    - Exponential backoff: 2s -> 4s -> 8s -> ... max 30s
+    - 2 attempts per model with exponential backoff (1.5s -> 3s)
     - Retries ONLY on 503, 429, and UNAVAILABLE errors
     - Logs each retry attempt with the model name to the terminal
     """
     retrying = Retrying(
-        stop=stop_after_attempt(5),
-        wait=wait_exponential(multiplier=2, min=2, max=30),
+        stop=stop_after_attempt(2),
+        wait=wait_exponential(multiplier=1.5, min=1.5, max=10),
         retry=retry_if_exception(is_overload_error),
         reraise=True,
         before_sleep=lambda retry_state: logger.warning(
@@ -143,6 +148,51 @@ def _execute_model_with_tenacity_retry(
     return ""
 
 
+def get_model_candidates() -> List[Tuple[str, str]]:
+    """
+    Build an ordered cascading list of (provider, model_name) pairs.
+    Includes user configured primary/fallback models and expands to all available free models
+    across Groq and Google Gemini based on present API keys.
+    """
+    has_groq = bool(settings.groq_api_key and settings.groq_api_key.strip())
+    has_gemini = bool(settings.gemini_api_key and settings.gemini_api_key.strip())
+    preferred_provider = settings.llm_provider.lower().strip()
+
+    candidates: List[Tuple[str, str]] = []
+
+    def add_candidate(prov: str, mod: str):
+        if not mod:
+            return
+        # Strip prefixes if any
+        clean_mod = mod.strip()
+        pair = (prov, clean_mod)
+        if pair not in candidates:
+            if prov == "groq" and has_groq:
+                candidates.append(pair)
+            elif prov == "gemini" and has_gemini:
+                candidates.append(pair)
+
+    # 1. Preferred primary & fallback models
+    if preferred_provider == "groq" and has_groq:
+        add_candidate("groq", settings.llm_model or "openai/gpt-oss-120b")
+        add_candidate("groq", settings.llm_fallback_model or "openai/gpt-oss-20b")
+    elif preferred_provider == "gemini" and has_gemini:
+        add_candidate("gemini", settings.llm_model or "gemini-2.5-flash")
+        add_candidate("gemini", settings.llm_fallback_model or "gemini-2.5-flash-lite")
+
+    # 2. Add other free Groq models (high throughput, zero cost)
+    if has_groq:
+        for groq_model in ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b", "allam-2-7b"]:
+            add_candidate("groq", groq_model)
+
+    # 3. Add Google Gemini free-tier models (cross-provider resilient failover)
+    if has_gemini:
+        for gemini_model in ["gemini-3.1-flash-lite", "gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-2.5-flash"]:
+            add_candidate("gemini", gemini_model)
+
+    return candidates
+
+
 def generate_content_with_fallback(
     system_prompt: str,
     user_prompt: str,
@@ -150,52 +200,44 @@ def generate_content_with_fallback(
     max_tokens: int = 1500,
 ) -> str:
     """
-    Executes primary model generation with retries.
-    If the primary model fails after all 5 retries, automatically switches
-    to the fallback model (also with retries).
-    If both models fail with overload, raises AIModelOverloadError.
+    Executes cascading generation across all available free models:
+    - Tries candidate models in order with exponential retries
+    - If a model is overloaded, rate-limited, or fails, automatically switches to the next free model
+    - Seamlessly fails over between Groq and Gemini if needed
+    - If all candidates in the multi-model chain fail, raises AIModelOverloadError
     """
-    provider = settings.llm_provider.lower()
-    primary_model = settings.llm_model or ("openai/gpt-oss-120b" if provider == "groq" else "gemini-3.1-flash-lite")
-    fallback_model = settings.llm_fallback_model or ("openai/gpt-oss-20b" if provider == "groq" else "gemini-3.5-flash-lite")
+    candidates = get_model_candidates()
+    if not candidates:
+        logger.error("No valid LLM credentials configured (neither GROQ_API_KEY nor GEMINI_API_KEY found).")
+        raise AIModelOverloadError("No AI model provider credentials are configured.")
 
-    try:
-        logger.info(f"Generating content using primary model '{primary_model}' ({provider})...")
-        return _execute_model_with_tenacity_retry(
-            provider=provider,
-            model_name=primary_model,
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
-    except Exception as exc:
-        if is_overload_error(exc):
-            logger.warning(
-                f"[Model Failover] Primary model '{primary_model}' exhausted all 5 retries due to high demand. "
-                f"Switching to fallback model '{fallback_model}'..."
+    last_error = None
+    for idx, (provider, model_name) in enumerate(candidates, start=1):
+        try:
+            logger.info(f"[LLM Inference] Candidate {idx}/{len(candidates)}: Trying '{model_name}' ({provider})...")
+            answer = _execute_model_with_tenacity_retry(
+                provider=provider,
+                model_name=model_name,
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                temperature=temperature,
+                max_tokens=max_tokens,
             )
-            try:
-                return _execute_model_with_tenacity_retry(
-                    provider=provider,
-                    model_name=fallback_model,
-                    system_prompt=system_prompt,
-                    user_prompt=user_prompt,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                )
-            except Exception as fallback_exc:
-                if is_overload_error(fallback_exc):
-                    logger.error(
-                        f"[Model Failover Failed] Fallback model '{fallback_model}' also failed with overload. "
-                        f"Raising AIModelOverloadError."
-                    )
-                    raise AIModelOverloadError(
-                        "Both primary and fallback AI models are currently overloaded."
-                    ) from fallback_exc
-                raise fallback_exc
-        # If it wasn't an overload error, re-raise immediately so genuine bugs are visible
-        raise exc
+            if answer and answer.strip():
+                if idx > 1:
+                    logger.info(f"[LLM Failover Success] Successfully recovered with candidate {idx}: '{model_name}' ({provider})!")
+                return answer.strip()
+        except Exception as exc:
+            last_error = exc
+            logger.warning(
+                f"[LLM Model Failover] Candidate {idx}/{len(candidates)} '{model_name}' ({provider}) failed with: {exc}. "
+                f"Attempting next free model candidate..."
+            )
+
+    logger.error(f"[LLM Exhaustion] All {len(candidates)} models in the cascading fallback chain failed.")
+    raise AIModelOverloadError(
+        f"All AI generation models are currently unavailable: {last_error}"
+    ) from last_error
 
 SYSTEM_INSTRUCTION = """You are PolicyPilot, an enterprise public policy assistant.
 Answer the user's question accurately, professionally, and strictly using ONLY the provided document passages.

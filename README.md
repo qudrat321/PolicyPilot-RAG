@@ -66,23 +66,48 @@ To guarantee maximum availability and instant sub-second responses:
 
 ## 📸 Application Showcase & User Experience
 
+### 1. High-Impact Enterprise Landing Page
+<p align="center">
+  <img src="./docs/assets/landing_page.png" alt="PolicyPilot Enterprise Landing Page" width="100%"/>
+</p>
+
+> **Product Landing Page**: Presents PolicyPilot's zero-cost, enterprise-grade policy intelligence, strict grounding guarantees, and instant feature exploration before sign-in.
+
+---
+
+### 2. Enterprise Authentication & Access Control
+<p align="center">
+  <img src="./docs/assets/Registration%20and%20Login.png" alt="Enterprise Auth & Registration Modal" width="100%"/>
+</p>
+
+> **Supabase Auth Engine**: Multi-tenant authentication modal supporting Email & Password registration, 1-click Google OAuth single sign-on, password visibility toggles, and international contact selector with Pakistan (`🇵🇰 +92`) pre-selected by default.
+
+---
+
+### 3. Central Knowledge Base & Document Hub
 <p align="center">
   <img src="./docs/assets/main_dasboard.png" alt="PolicyPilot Central Dashboard" width="100%"/>
 </p>
 
-> **Central Knowledge Base**: Features real-time Qdrant Cloud vector status, SHA-256 deduplication, active anti-hallucination threshold monitoring (0.58), multi-format file ingestion (PDF, DOCX, XLSX, CSV, PPTX, HTML), and persistent user history.
+> **Central Knowledge Base**: Features real-time Qdrant Cloud vector cluster connectivity, SHA-256 deduplication (0 tokens spent on re-upload), active anti-hallucination threshold monitoring (0.58), multi-format file ingestion (PDF, DOCX, XLSX, CSV, PPTX, HTML), query scope filters, and docked user profile management.
 
+---
+
+### 4. Transparent Grounded QA & Audit Trail
 <p align="center">
-  <img src="./docs/assets/response_screen.jpg" alt="Policy Comparison and Citation Matrix" width="100%"/>
+  <img src="./docs/assets/Response_screen.png" alt="Policy Comparison and Citation Matrix" width="100%"/>
 </p>
 
-> **Transparent Grounding & Cross-Comparison**: Grounded synthesis comparing operational policies. Every assertion cites exact document pages (`[1]`, `[2]`, `[3]`), accompanied by an expandable 4-chunk retrieval audit trail (`Score: 0.6900`), copy answers, and table-level inspection.
+> **Strict Grounding & Transparent Citations**: High-speed synthesis powered by the cascading multi-model fallback chain. Every factual claim cites exact document pages (`[1]`, `[2]`), accompanied by an expandable 4-chunk retrieval audit trail with cosine similarity scores, quick copy controls, and tabular inspections.
 
+---
+
+### 5. High-Fidelity Executive PDF Compliance Export
 <p align="center">
   <img src="./docs/assets/pdf_export.jpg" alt="Executive PDF Compliance Report" width="85%"/>
 </p>
 
-> **High-Fidelity PDF Compliance Export**: Single-click boardroom-ready report featuring Deep Slate & Emerald corporate branding, dynamic Purpose & Scope verification headers, auto-wrapped data tables, and zero raw markdown artifacts.
+> **Boardroom-Ready Compliance Export**: Single-click PDF export delivering executive compliance reports featuring Deep Slate & Emerald corporate branding, dynamic Purpose & Scope verification headers, auto-wrapped data tables, and zero raw markdown artifacts.
 
 ---
 

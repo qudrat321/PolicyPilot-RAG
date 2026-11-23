@@ -6,8 +6,16 @@ from typing import Optional
 class Settings(BaseSettings):
     """Holds configuration values loaded from environment variables or .env file."""
 
-    # Google AI Studio API Key (for Gemini Flash and text-embedding-004)
+    # Google AI Studio API Key (for embeddings & optional Gemini generation)
     gemini_api_key: str = ""
+
+    # Groq API Key and Provider selection
+    groq_api_key: str = ""
+    llm_provider: str = "groq"  # "groq" or "gemini"
+
+    # Primary and fallback LLM models for resilient failover
+    llm_model: str = "openai/gpt-oss-120b"
+    llm_fallback_model: str = "openai/gpt-oss-20b"
 
     # Qdrant Cloud Free Cluster settings
     qdrant_url: str = ""

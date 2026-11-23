@@ -1250,6 +1250,23 @@ export default function App() {
       });
 
       const data = await res.json();
+
+      // Clean HTTP 503 or server error handling - never leak raw provider errors
+      if (!res.ok) {
+        const errorDetail = data.detail || 'The AI model is busy. Please try again in a few seconds.';
+        const assistantMessage = {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: errorDetail,
+          is_refusal: false,
+          citations: [],
+          retrieved_chunks: [],
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        };
+        setMessages([...baseMessages, assistantMessage]);
+        return;
+      }
+
       const assistantMessage = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
@@ -2574,7 +2591,7 @@ export default function App() {
 
             <div className={`flex items-center justify-between text-[11px] mt-2 px-1 font-semibold ${theme === 'dark' ? 'text-slate-500' : 'text-slate-700'}`}>
               <span>PolicyPilot grounds answers in verified embeddings &bull; Zero Hallucination Guarantee</span>
-              <span className="hidden sm:inline font-mono text-[10px]">Gemini 3.1 Flash Lite</span>
+              <span className="hidden sm:inline font-mono text-[10px]">Groq (GPT-OSS 120B)</span>
             </div>
           </div>
         </div>

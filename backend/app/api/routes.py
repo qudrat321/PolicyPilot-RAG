@@ -23,6 +23,7 @@ from app.services.generation import (
     generate_grounded_answer,
     is_translation_or_reformat_request,
     translate_or_reformat_previous_answer,
+    AIModelOverloadError,
 )
 from fastapi.responses import Response
 from pydantic import BaseModel
@@ -218,15 +219,34 @@ def _sync_ask(
 
 @router.post("/ask", response_model=AskResponse)
 async def ask_policy_question(payload: AskRequest):
-    """Retrieve relevant chunks (with optional document scoping) and generate a grounded answer."""
+    """
+    Retrieve relevant chunks (with optional document scoping) and generate a grounded answer.
+    Catches LLM provider overload / rate limit errors and returns a clean HTTP 503
+    so raw provider errors never leak to the client.
+    """
     question = payload.question.strip()
     if not question:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Question cannot be empty.")
 
-    return await asyncio.to_thread(
-        _sync_ask,
-        question=question,
-        doc_id=payload.doc_id,
-        file_hash=payload.file_hash,
-        history=payload.history,
-    )
+    try:
+        return await asyncio.to_thread(
+            _sync_ask,
+            question=question,
+            doc_id=payload.doc_id,
+            file_hash=payload.file_hash,
+            history=payload.history,
+        )
+    except AIModelOverloadError as exc:
+        # Catch custom overload error after tenacity retries and fallback failover
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="The AI model is busy. Please try again in a few seconds.",
+        )
+    except Exception as exc:
+        err_msg = str(exc)
+        if any(w in err_msg.lower() for w in ["503", "unavailable", "high demand", "429", "overloaded", "quota"]):
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="The AI model is busy. Please try again in a few seconds.",
+            )
+        raise exc

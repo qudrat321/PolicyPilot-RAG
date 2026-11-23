@@ -2216,23 +2216,25 @@ export default function App() {
                       <span className="font-mono">{msg.timestamp}</span>
                       <div className="flex items-center gap-2">
                         
-                        {/* Direct Export as PDF Button */}
-                        <button
-                          onClick={() => {
-                            const msgIdx = messages.findIndex(m => m.id === msg.id);
-                            const qText = msgIdx > 0 ? messages[msgIdx - 1]?.content : 'Policy Inquiry';
-                            exportToPdf(qText, msg.content, msg.citations, activeDocName);
-                          }}
-                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-semibold transition-all shadow-xs ${
-                            theme === 'dark'
-                              ? 'bg-slate-900 border-slate-750 text-slate-200 hover:text-emerald-400 hover:border-emerald-500/50'
-                              : 'bg-white border-slate-300 text-slate-800 hover:text-emerald-700 hover:border-emerald-500'
-                          }`}
-                          title="Export response as PDF"
-                        >
-                          <FileDown className="w-3.5 h-3.5 text-emerald-500" />
-                          <span>Export PDF</span>
-                        </button>
+                        {/* Direct Export as PDF Button - Only show if verified & grounded (hidden on refusals) */}
+                        {!msg.is_refusal && !msg.content?.includes('The retrieved policy chunks do not verify this specific query') && (
+                          <button
+                            onClick={() => {
+                              const msgIdx = messages.findIndex(m => m.id === msg.id);
+                              const qText = msgIdx > 0 ? messages[msgIdx - 1]?.content : 'Policy Inquiry';
+                              exportToPdf(qText, msg.content, msg.citations, activeDocName);
+                            }}
+                            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-semibold transition-all shadow-xs ${
+                              theme === 'dark'
+                                ? 'bg-slate-900 border-slate-750 text-slate-200 hover:text-emerald-400 hover:border-emerald-500/50'
+                                : 'bg-white border-slate-300 text-slate-800 hover:text-emerald-700 hover:border-emerald-500'
+                            }`}
+                            title="Export response as PDF"
+                          >
+                            <FileDown className="w-3.5 h-3.5 text-emerald-500" />
+                            <span>Export PDF</span>
+                          </button>
+                        )}
 
                         {/* Copy Answer Button */}
                         <button

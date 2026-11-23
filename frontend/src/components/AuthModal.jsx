@@ -90,7 +90,8 @@ import {
   signUpUser,
   signInWithGoogleOAuth,
   sendPasswordResetEmail,
-  updateUserPassword
+  updateUserPassword,
+  resendVerificationEmail
 } from '../supabaseClient';
 
 export default function AuthModal({
@@ -112,6 +113,8 @@ export default function AuthModal({
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [showResendOption, setShowResendOption] = useState(false);
+  const [resending, setResending] = useState(false);
 
   // Keep mode in sync when initialMode changes upon opening
   React.useEffect(() => {
@@ -121,8 +124,31 @@ export default function AuthModal({
       setSuccessMsg('');
       setShowPassword(false);
       setShowConfirmPassword(false);
+      setShowResendOption(false);
     }
   }, [isOpen, initialMode]);
+
+  const handleResendVerification = async () => {
+    if (!email.trim()) {
+      setErrorMsg('Please enter your email address first.');
+      return;
+    }
+    setResending(true);
+    try {
+      const { error } = await resendVerificationEmail(email.trim());
+      if (error) {
+        setErrorMsg(error.message);
+      } else {
+        setShowResendOption(false);
+        setErrorMsg('');
+        setSuccessMsg('Verification email sent! Please check your inbox and spam folder.');
+      }
+    } catch (err) {
+      setErrorMsg('Failed to send verification email. Please try again.');
+    } finally {
+      setResending(false);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -168,12 +194,11 @@ export default function AuthModal({
           setErrorMsg(error.message);
         } else if (data?.user && !data?.session) {
           // Supabase has 'Confirm email' enabled by default
-          setSuccessMsg(
-            'Account registered! A confirmation email was sent to your inbox. Please click the link to activate your account, or disable "Confirm email" in Supabase Auth settings (Authentication -> Providers -> Email) to log in instantly.'
-          );
+          setSuccessMsg('Account registered! Please verify your email to login.');
+          setShowResendOption(true);
           setTimeout(() => {
             setMode('login');
-          }, 3000);
+          }, 2500);
         } else {
           setSuccessMsg('Account created successfully! Entering workspace...');
           setTimeout(() => {
@@ -193,11 +218,11 @@ export default function AuthModal({
           const rawMsg = (error.message || '').trim();
           const lowerMsg = rawMsg.toLowerCase();
           if (lowerMsg.includes('invalid login credentials') || lowerMsg.includes('email not confirmed')) {
-            setErrorMsg(
-              'Invalid credentials or unconfirmed email. If your email is registered in Supabase, Supabase blocks password sign-in until the email verification link in your inbox is clicked. To allow instant login, toggle OFF "Confirm email" in your Supabase dashboard under Authentication -> Providers -> Email.'
-            );
+            setErrorMsg('Please verify your email to login.');
+            setShowResendOption(true);
           } else {
             setErrorMsg(rawMsg);
+            setShowResendOption(false);
           }
         } else {
           setSuccessMsg('Signed in successfully! Entering workspace...');
@@ -400,14 +425,38 @@ export default function AuthModal({
           {errorMsg && (
             <div className="mb-3.5 p-2.5 rounded-xl border border-red-500/30 bg-red-500/10 text-red-400 text-xs flex items-start gap-2 animate-fade-in">
               <AlertCircle className="w-4 h-4 shrink-0 text-red-500 mt-0.5" />
-              <div className="flex-1 leading-snug">{errorMsg}</div>
+              <div className="flex-1 leading-snug">
+                <div>{errorMsg}</div>
+                {showResendOption && email.trim() && (
+                  <button
+                    type="button"
+                    onClick={handleResendVerification}
+                    disabled={resending}
+                    className="mt-1.5 inline-flex items-center gap-1 font-semibold text-emerald-400 hover:text-emerald-300 underline cursor-pointer disabled:opacity-50"
+                  >
+                    {resending ? 'Sending verification email...' : 'Send verification email again'}
+                  </button>
+                )}
+              </div>
             </div>
           )}
 
           {successMsg && (
             <div className="mb-3.5 p-2.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 text-xs flex items-start gap-2 animate-fade-in">
               <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-500 mt-0.5" />
-              <div className="flex-1 leading-snug">{successMsg}</div>
+              <div className="flex-1 leading-snug">
+                <div>{successMsg}</div>
+                {showResendOption && email.trim() && mode === 'login' && (
+                  <button
+                    type="button"
+                    onClick={handleResendVerification}
+                    disabled={resending}
+                    className="mt-1.5 inline-flex items-center gap-1 font-semibold text-emerald-400 hover:text-emerald-300 underline cursor-pointer disabled:opacity-50"
+                  >
+                    {resending ? 'Sending verification email...' : 'Send verification email again'}
+                  </button>
+                )}
+              </div>
             </div>
           )}
 

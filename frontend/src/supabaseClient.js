@@ -75,6 +75,23 @@ export async function sendPasswordResetEmail(email) {
 }
 
 /**
+ * Resend email verification link to user's registered email.
+ */
+export async function resendVerificationEmail(email) {
+  const cleanEmail = (email || '').trim().toLowerCase();
+  if (!isSupabaseConfigured()) {
+    return { data: {}, error: null };
+  }
+  return await supabase.auth.resend({
+    type: 'signup',
+    email: cleanEmail,
+    options: {
+      emailRedirectTo: `${window.location.origin}`,
+    },
+  });
+}
+
+/**
  * Update the password for the current authenticated user (e.g. after clicking reset link).
  */
 export async function updateUserPassword(newPassword) {

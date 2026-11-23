@@ -1,6 +1,11 @@
 """Application configuration and environment settings."""
+import os
+from pathlib import Path
 from pydantic_settings import BaseSettings
 from typing import Optional
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+ROOT_DIR = BASE_DIR.parent
 
 
 class Settings(BaseSettings):
@@ -39,7 +44,11 @@ class Settings(BaseSettings):
     max_total_vectors: int = 1500  # Soft quota guard for Qdrant Cloud Free Tier
 
     class Config:
-        env_file = ".env"
+        env_file = (
+            str(BASE_DIR / ".env"),
+            str(ROOT_DIR / ".env"),
+            ".env",
+        )
         env_file_encoding = "utf-8"
         extra = "ignore"
 

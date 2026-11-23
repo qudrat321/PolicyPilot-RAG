@@ -30,26 +30,28 @@ export const supabase = isSupabaseConfigured()
  * Register a new user with email, password, full name, and contact number.
  */
 export async function signUpUser(email, password, fullName, contactNumber = '') {
+  const cleanEmail = (email || '').trim().toLowerCase();
+
   if (!isSupabaseConfigured()) {
     // Local development fallback
     const mockUser = {
       id: 'mock-user-1',
-      email,
+      email: cleanEmail,
       user_metadata: {
         full_name: fullName,
         contact_number: contactNumber
       }
     };
     localStorage.setItem('policypilot_mock_user', JSON.stringify(mockUser));
-    return { data: { user: mockUser }, error: null };
+    return { data: { user: mockUser, session: { access_token: 'mock-token' } }, error: null };
   }
 
   const { data, error } = await supabase.auth.signUp({
-    email,
+    email: cleanEmail,
     password,
     options: {
       data: {
-        full_name: fullName || email.split('@')[0],
+        full_name: fullName || cleanEmail.split('@')[0],
         contact_number: contactNumber || '',
       },
     },
@@ -61,11 +63,12 @@ export async function signUpUser(email, password, fullName, contactNumber = '') 
  * Send password reset email to user's registered email address.
  */
 export async function sendPasswordResetEmail(email) {
+  const cleanEmail = (email || '').trim().toLowerCase();
   if (!isSupabaseConfigured()) {
     return { data: {}, error: null };
   }
 
-  const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
+  const { data, error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
     redirectTo: `${window.location.origin}`,
   });
   return { data, error };
@@ -75,14 +78,16 @@ export async function sendPasswordResetEmail(email) {
  * Sign in an existing user with email and password.
  */
 export async function signInUser(email, password) {
+  const cleanEmail = (email || '').trim().toLowerCase();
+
   if (!isSupabaseConfigured()) {
-    const mockUser = { id: 'mock-user-1', email, user_metadata: { full_name: email.split('@')[0] } };
+    const mockUser = { id: 'mock-user-1', email: cleanEmail, user_metadata: { full_name: cleanEmail.split('@')[0] } };
     localStorage.setItem('policypilot_mock_user', JSON.stringify(mockUser));
     return { data: { user: mockUser }, error: null };
   }
 
   const { data, error } = await supabase.auth.signInWithPassword({
-    email,
+    email: cleanEmail,
     password,
   });
   return { data, error };
@@ -160,9 +165,12 @@ export async function getActiveSessionToken() {
 export async function fetchUserChatHistory(userId) {
   if (!userId) return [];
 
+  // Instant local cache: return cached history immediately in 0ms
+  const cached = localStorage.getItem(`policypilot_history_${userId}`);
+  const cachedList = cached ? JSON.parse(cached) : [];
+
   if (!isSupabaseConfigured()) {
-    const raw = localStorage.getItem(`policypilot_history_${userId}`);
-    return raw ? JSON.parse(raw) : [];
+    return cachedList;
   }
 
   try {
@@ -175,12 +183,17 @@ export async function fetchUserChatHistory(userId) {
 
     if (error) {
       console.warn('Could not load chat history from Supabase:', error.message);
-      return [];
+      return cachedList;
     }
-    return data || [];
+
+    if (data && data.length > 0) {
+      localStorage.setItem(`policypilot_history_${userId}`, JSON.stringify(data));
+      return data;
+    }
+    return cachedList;
   } catch (err) {
     console.error('Error fetching chat history:', err);
-    return [];
+    return cachedList;
   }
 }
 
@@ -207,12 +220,18 @@ export async function saveChatTurnToDatabase(
     created_at: new Date().toISOString(),
   };
 
-  if (!isSupabaseConfigured()) {
+  // Always sync immediately to localStorage for instant 0ms offline/SWR read
+  try {
     const existing = JSON.parse(localStorage.getItem(`policypilot_history_${userId}`) || '[]');
     const normQ = question.trim().toLowerCase();
     const filtered = existing.filter(item => item.question?.trim().toLowerCase() !== normQ);
     filtered.unshift({ id: Date.now().toString(), ...entry });
     localStorage.setItem(`policypilot_history_${userId}`, JSON.stringify(filtered.slice(0, 50)));
+  } catch (e) {
+    // Ignore localStorage quota errors
+  }
+
+  if (!isSupabaseConfigured()) {
     return;
   }
 

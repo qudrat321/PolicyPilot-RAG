@@ -85,6 +85,14 @@ export default function AuthModal({
 
         if (error) {
           setErrorMsg(error.message);
+        } else if (data?.user && !data?.session) {
+          // Supabase has 'Confirm email' enabled by default
+          setSuccessMsg(
+            'Account registered! A confirmation email was sent to your inbox. Please click the link to activate your account, or disable "Confirm email" in Supabase Auth settings (Authentication -> Providers -> Email) to log in instantly.'
+          );
+          setTimeout(() => {
+            setMode('login');
+          }, 3000);
         } else {
           setSuccessMsg('Account created successfully! Entering workspace...');
           setTimeout(() => {
@@ -101,7 +109,15 @@ export default function AuthModal({
 
         const { data, error } = await signInUser(email.trim(), password);
         if (error) {
-          setErrorMsg(error.message);
+          const rawMsg = (error.message || '').trim();
+          const lowerMsg = rawMsg.toLowerCase();
+          if (lowerMsg.includes('invalid login credentials') || lowerMsg.includes('email not confirmed')) {
+            setErrorMsg(
+              'Invalid credentials or unconfirmed email. If your email is registered in Supabase, Supabase blocks password sign-in until the email verification link in your inbox is clicked. To allow instant login, toggle OFF "Confirm email" in your Supabase dashboard under Authentication -> Providers -> Email.'
+            );
+          } else {
+            setErrorMsg(rawMsg);
+          }
         } else {
           setSuccessMsg('Signed in successfully! Entering workspace...');
           setTimeout(() => {

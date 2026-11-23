@@ -1107,8 +1107,17 @@ export default function App() {
 
       setMessages([...baseMessages, cachedAssistantMsg]);
       const targetUserId = currentUser?.id || 'guest';
-      saveChatTurnToDatabase(targetUserId, query, cachedTurn.answer, cachedTurn.citations, false);
-      loadHistory(targetUserId);
+
+      // ⚡ Optimistic Instant History Update (0ms UI latency)
+      setChatHistory(prev => {
+        const normQ = query.trim().toLowerCase();
+        const existing = prev.find(item => item.question?.trim().toLowerCase() === normQ) || cachedTurn;
+        const filtered = prev.filter(item => item.question?.trim().toLowerCase() !== normQ);
+        return [{ ...existing, created_at: new Date().toISOString() }, ...filtered].slice(0, 50);
+      });
+
+      // Background persist without UI blocking
+      saveChatTurnToDatabase(targetUserId, query, cachedTurn.answer, cachedTurn.citations, false).catch(console.warn);
       return;
     }
 
@@ -1151,10 +1160,26 @@ export default function App() {
 
       setMessages([...baseMessages, assistantMessage]);
 
-      // Save turn to database for the active user (or guest local storage)
+      // ⚡ Optimistic Instant History Update (0ms UI latency)
       const targetUserId = currentUser?.id || 'guest';
-      saveChatTurnToDatabase(targetUserId, query, data.answer, data.citations, data.is_refusal);
-      loadHistory(targetUserId);
+      const newHistoryItem = {
+        id: Date.now().toString(),
+        user_id: targetUserId,
+        session_id: 'default',
+        question: query.trim(),
+        answer: data.answer,
+        citations: data.citations || [],
+        is_refusal: Boolean(data.is_refusal),
+        created_at: new Date().toISOString()
+      };
+      setChatHistory(prev => {
+        const normQ = query.trim().toLowerCase();
+        const filtered = prev.filter(item => item.question?.trim().toLowerCase() !== normQ);
+        return [newHistoryItem, ...filtered].slice(0, 50);
+      });
+
+      // Background sync to database
+      saveChatTurnToDatabase(targetUserId, query, data.answer, data.citations, data.is_refusal).catch(console.warn);
     } catch (err) {
       const errorMessage = {
         id: (Date.now() + 1).toString(),
@@ -1836,21 +1861,8 @@ export default function App() {
               </button>
             )}
 
-            {/* Quick Sign Out Action (Profile is docked at sidebar bottom) */}
-            {currentUser ? (
-              <button
-                onClick={handleSignOut}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
-                  theme === 'dark'
-                    ? 'bg-slate-900 border-slate-800 text-slate-400 hover:text-rose-400 hover:border-rose-500/40 hover:bg-rose-950/20'
-                    : 'bg-white border-slate-300 text-slate-700 hover:text-rose-600 hover:border-rose-400 hover:bg-rose-50 shadow-xs'
-                }`}
-                title="Sign Out of PolicyPilot"
-              >
-                <LogOut className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Sign Out</span>
-              </button>
-            ) : (
+            {/* Sign In button for guest users (when logged in, profile & logout are docked at the sidebar bottom) */}
+            {!currentUser && (
               <button
                 onClick={() => setAuthModalOpen(true)}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs transition-all shadow-sm cursor-pointer"

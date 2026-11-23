@@ -29,8 +29,23 @@ import {
   FileDown,
   Table,
   Sun,
-  Moon
+  Moon,
+  History,
+  LogIn,
+  LogOut,
+  User,
+  Clock,
+  MessageSquare
 } from 'lucide-react';
+import AuthModal from './components/AuthModal';
+import {
+  getActiveUser,
+  signOutUser,
+  fetchUserChatHistory,
+  saveChatTurnToDatabase,
+  clearUserChatHistory,
+  isSupabaseConfigured
+} from './supabaseClient';
 
 // Initialize mermaid for dark mode diagrams
 mermaid.initialize({
@@ -872,6 +887,14 @@ export default function App() {
   const [expandedInspectors, setExpandedInspectors] = useState({});
   const [copiedId, setCopiedId] = useState(null);
 
+  // Authentication & Chat History state
+  const [currentUser, setCurrentUser] = useState(null);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+  const [sidebarTab, setSidebarTab] = useState('documents'); // 'documents' | 'history'
+  const [chatHistory, setChatHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
   // Theme state: 'dark' (default) or 'light'
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
 
@@ -892,7 +915,67 @@ export default function App() {
   useEffect(() => {
     checkHealth();
     loadDocuments();
+    initUser();
   }, []);
+
+  const initUser = async () => {
+    const user = await getActiveUser();
+    setCurrentUser(user);
+    if (user?.id) {
+      loadHistory(user.id);
+    }
+  };
+
+  const loadHistory = async (userId) => {
+    if (!userId) return;
+    setHistoryLoading(true);
+    try {
+      const hist = await fetchUserChatHistory(userId);
+      setChatHistory(hist || []);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  const handleAuthSuccess = (user) => {
+    setCurrentUser(user);
+    if (user?.id) {
+      loadHistory(user.id);
+    }
+  };
+
+  const handleSignOut = async () => {
+    await signOutUser();
+    setCurrentUser(null);
+    setChatHistory([]);
+    setUserDropdownOpen(false);
+  };
+
+  const handleSelectHistoryItem = (item) => {
+    const userMsg = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: item.question,
+      timestamp: new Date(item.created_at || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    };
+    const botMsg = {
+      id: (Date.now() + 1).toString(),
+      role: 'assistant',
+      content: item.answer,
+      is_refusal: item.is_refusal || false,
+      citations: item.citations || [],
+      retrieved_chunks: [],
+      timestamp: new Date(item.created_at || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    };
+    setMessages([userMsg, botMsg]);
+  };
+
+  const handleClearHistory = async () => {
+    if (!currentUser?.id) return;
+    if (!confirm('Clear all your saved question history?')) return;
+    await clearUserChatHistory(currentUser.id);
+    setChatHistory([]);
+  };
 
   useEffect(() => {
     if (theme === 'dark') {
@@ -1021,6 +1104,11 @@ export default function App() {
       };
 
       setMessages([...baseMessages, assistantMessage]);
+
+      // Save turn to database for the active user (or guest local storage)
+      const targetUserId = currentUser?.id || 'guest';
+      saveChatTurnToDatabase(targetUserId, query, data.answer, data.citations, data.is_refusal);
+      loadHistory(targetUserId);
     } catch (err) {
       const errorMessage = {
         id: (Date.now() + 1).toString(),
@@ -1252,128 +1340,232 @@ export default function App() {
           </button>
         </div>
 
-        {/* Upload Zone / Dropzone */}
-        <div className={`p-4 border-b ${theme === 'dark' ? 'border-slate-800/60' : 'border-slate-200'}`}>
-          <div
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-            onClick={() => fileInputRef.current?.click()}
-            className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-colors ${
-              isDragging
-                ? 'border-emerald-500 bg-emerald-500/10 text-emerald-600'
-                : theme === 'dark'
-                ? 'border-slate-800 hover:border-slate-700 bg-slate-900/40 hover:bg-slate-900/80 text-slate-400'
-                : 'border-slate-300 hover:border-emerald-600 bg-slate-50/80 hover:bg-emerald-50/30 text-slate-700 shadow-xs'
-            }`}
-          >
-            <UploadCloud className={`w-6 h-6 mx-auto mb-1.5 ${theme === 'dark' ? 'text-slate-300' : 'text-emerald-600'}`} />
-            <p className={`text-xs font-bold ${theme === 'dark' ? 'text-slate-200' : 'text-slate-950'}`}>
-              {uploadLoading ? 'Indexing vectors...' : 'Drop or browse policy files'}
-            </p>
-            <p className={`text-[10px] mt-1 font-semibold ${theme === 'dark' ? 'text-slate-500' : 'text-slate-600'}`}>PDF, DOCX, XLSX, CSV, PPTX, HTML</p>
-          </div>
-
-          {/* Upload Status Banner */}
-          {uploadNotice && (
-            <div
-              className={`mt-2 p-2 rounded-lg text-xs flex items-start gap-2 border ${
-                uploadNotice.type === 'success'
-                  ? 'bg-emerald-950/40 text-emerald-300 border-emerald-800/80'
-                  : 'bg-rose-950/40 text-rose-300 border-rose-800/80'
-              }`}
-            >
-              {uploadNotice.type === 'success' ? (
-                <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-              ) : (
-                <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-              )}
-              <span className="leading-tight">{uploadNotice.text}</span>
-            </div>
-          )}
-        </div>
-
-        {/* Scope Selector: All Documents vs Specific */}
-        <div className="px-4 pt-3 pb-1">
-          <div className={`flex items-center justify-between text-[11px] font-bold uppercase tracking-wider mb-2 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-700'}`}>
-            <span>Query Scope Filter</span>
-            <span className={`font-mono text-[10px] font-bold ${theme === 'dark' ? 'text-emerald-500' : 'text-emerald-700'}`}>{documents.length} Indexed</span>
-          </div>
+        {/* Sidebar Navigation Tabs (Documents vs Chat History) */}
+        <div className={`p-2 border-b flex gap-1 ${theme === 'dark' ? 'border-slate-800/80 bg-slate-950/40' : 'border-slate-200 bg-slate-50'}`}>
           <button
-            onClick={() => setSelectedDocId('all')}
-            className={`w-full text-left px-3 py-2 rounded-lg text-xs font-semibold flex items-center justify-between transition-colors mb-1.5 ${
-              selectedDocId === 'all'
+            onClick={() => setSidebarTab('documents')}
+            className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+              sidebarTab === 'documents'
                 ? theme === 'dark'
                   ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
-                  : 'bg-emerald-50 text-emerald-950 border-2 border-emerald-500/70 shadow-xs'
+                  : 'bg-white text-emerald-800 border border-slate-200 shadow-xs'
                 : theme === 'dark'
-                ? 'text-slate-300 hover:bg-slate-850 hover:text-white border border-transparent'
-                : 'text-slate-800 hover:bg-slate-100 hover:text-slate-950 border border-slate-200'
+                ? 'text-slate-400 hover:text-slate-200'
+                : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            <div className="flex items-center gap-2">
-              <Database className="w-3.5 h-3.5" />
-              <span>Search Across All Documents</span>
-            </div>
-            {selectedDocId === 'all' && <Check className="w-3.5 h-3.5 text-emerald-600 font-bold" />}
+            <FileText className="w-3.5 h-3.5" />
+            <span>Documents ({documents.length})</span>
+          </button>
+
+          <button
+            onClick={() => setSidebarTab('history')}
+            className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+              sidebarTab === 'history'
+                ? theme === 'dark'
+                  ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                  : 'bg-white text-emerald-800 border border-slate-200 shadow-xs'
+                : theme === 'dark'
+                ? 'text-slate-400 hover:text-slate-200'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <History className="w-3.5 h-3.5" />
+            <span>History ({chatHistory.length})</span>
           </button>
         </div>
 
-        {/* Document List */}
-        <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-1.5">
-          {documents.length === 0 ? (
-            <div className={`p-4 text-center text-xs rounded-lg border ${theme === 'dark' ? 'text-slate-500 border-slate-900' : 'text-slate-600 border-slate-300 bg-slate-50 font-medium'}`}>
-              No documents indexed yet. Upload a policy PDF or document to begin.
-            </div>
-          ) : (
-            documents.map((doc) => {
-              const isSelected = selectedDocId === doc.doc_id;
-              return (
+        {/* Tab 1: Documents & Ingestion */}
+        {sidebarTab === 'documents' && (
+          <>
+            {/* Upload Zone / Dropzone */}
+            <div className={`p-4 border-b ${theme === 'dark' ? 'border-slate-800/60' : 'border-slate-200'}`}>
+              <div
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current?.click()}
+                className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-colors ${
+                  isDragging
+                    ? 'border-emerald-500 bg-emerald-500/10 text-emerald-600'
+                    : theme === 'dark'
+                    ? 'border-slate-800 hover:border-slate-700 bg-slate-900/40 hover:bg-slate-900/80 text-slate-400'
+                    : 'border-slate-300 hover:border-emerald-600 bg-slate-50/80 hover:bg-emerald-50/30 text-slate-700 shadow-xs'
+                }`}
+              >
+                <UploadCloud className={`w-6 h-6 mx-auto mb-1.5 ${theme === 'dark' ? 'text-slate-300' : 'text-emerald-600'}`} />
+                <p className={`text-xs font-bold ${theme === 'dark' ? 'text-slate-200' : 'text-slate-950'}`}>
+                  {uploadLoading ? 'Indexing vectors...' : 'Drop or browse policy files'}
+                </p>
+                <p className={`text-[10px] mt-1 font-semibold ${theme === 'dark' ? 'text-slate-500' : 'text-slate-600'}`}>PDF, DOCX, XLSX, CSV, PPTX, HTML</p>
+              </div>
+
+              {/* Upload Status Banner */}
+              {uploadNotice && (
                 <div
-                  key={doc.doc_id}
-                  onClick={() => setSelectedDocId(isSelected ? 'all' : doc.doc_id)}
-                  className={`group relative p-2.5 rounded-lg border text-xs cursor-pointer transition-all ${
-                    isSelected
-                      ? theme === 'dark'
-                        ? 'bg-slate-800/90 border-emerald-500/50 shadow-sm'
-                        : 'bg-emerald-50/90 border-2 border-emerald-500/70 shadow-xs'
-                      : theme === 'dark'
-                      ? 'bg-slate-900/60 border-slate-800/80 hover:border-slate-700 hover:bg-slate-900'
-                      : 'bg-white border border-slate-300 hover:border-slate-400 hover:bg-slate-50 shadow-xs'
+                  className={`mt-2 p-2 rounded-lg text-xs flex items-start gap-2 border ${
+                    uploadNotice.type === 'success'
+                      ? 'bg-emerald-950/40 text-emerald-300 border-emerald-800/80'
+                      : 'bg-rose-950/40 text-rose-300 border-rose-800/80'
                   }`}
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-start gap-2 overflow-hidden">
-                      <FileText className={`w-4 h-4 mt-0.5 shrink-0 ${isSelected ? (theme === 'dark' ? 'text-emerald-400' : 'text-emerald-700') : (theme === 'dark' ? 'text-slate-400' : 'text-slate-600')}`} />
-                      <div className="overflow-hidden">
-                        <p className={`font-bold truncate ${isSelected ? (theme === 'dark' ? 'text-emerald-300' : 'text-emerald-950') : (theme === 'dark' ? 'text-slate-200' : 'text-slate-950')}`} title={doc.filename}>
-                          {doc.filename}
+                  {uploadNotice.type === 'success' ? (
+                    <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                  ) : (
+                    <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                  )}
+                  <span className="leading-tight">{uploadNotice.text}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Scope Selector: All Documents vs Specific */}
+            <div className="px-4 pt-3 pb-1">
+              <div className={`flex items-center justify-between text-[11px] font-bold uppercase tracking-wider mb-2 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-700'}`}>
+                <span>Query Scope Filter</span>
+                <span className={`font-mono text-[10px] font-bold ${theme === 'dark' ? 'text-emerald-500' : 'text-emerald-700'}`}>{documents.length} Indexed</span>
+              </div>
+              <button
+                onClick={() => setSelectedDocId('all')}
+                className={`w-full text-left px-3 py-2 rounded-lg text-xs font-semibold flex items-center justify-between transition-colors mb-1.5 ${
+                  selectedDocId === 'all'
+                    ? theme === 'dark'
+                      ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                      : 'bg-emerald-50 text-emerald-950 border-2 border-emerald-500/70 shadow-xs'
+                    : theme === 'dark'
+                    ? 'text-slate-300 hover:bg-slate-850 hover:text-white border border-transparent'
+                    : 'text-slate-800 hover:bg-slate-100 hover:text-slate-950 border border-slate-200'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Database className="w-3.5 h-3.5" />
+                  <span>Search Across All Documents</span>
+                </div>
+                {selectedDocId === 'all' && <Check className="w-3.5 h-3.5 text-emerald-600 font-bold" />}
+              </button>
+            </div>
+
+            {/* Document List */}
+            <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-1.5">
+              {documents.length === 0 ? (
+                <div className={`p-4 text-center text-xs rounded-lg border ${theme === 'dark' ? 'text-slate-500 border-slate-900' : 'text-slate-600 border-slate-300 bg-slate-50 font-medium'}`}>
+                  No documents indexed yet. Upload a policy PDF or document to begin.
+                </div>
+              ) : (
+                documents.map((doc) => {
+                  const isSelected = selectedDocId === doc.doc_id;
+                  return (
+                    <div
+                      key={doc.doc_id}
+                      onClick={() => setSelectedDocId(isSelected ? 'all' : doc.doc_id)}
+                      className={`group relative p-2.5 rounded-lg border text-xs cursor-pointer transition-all ${
+                        isSelected
+                          ? theme === 'dark'
+                            ? 'bg-slate-800/90 border-emerald-500/50 shadow-sm'
+                            : 'bg-emerald-50/90 border-2 border-emerald-500/70 shadow-xs'
+                          : theme === 'dark'
+                          ? 'bg-slate-900/60 border-slate-800/80 hover:border-slate-700 hover:bg-slate-900'
+                          : 'bg-white border border-slate-300 hover:border-slate-400 hover:bg-slate-50 shadow-xs'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-start gap-2 overflow-hidden">
+                          <FileText className={`w-4 h-4 mt-0.5 shrink-0 ${isSelected ? (theme === 'dark' ? 'text-emerald-400' : 'text-emerald-700') : (theme === 'dark' ? 'text-slate-400' : 'text-slate-600')}`} />
+                          <div className="overflow-hidden">
+                            <p className={`font-bold truncate ${isSelected ? (theme === 'dark' ? 'text-emerald-300' : 'text-emerald-950') : (theme === 'dark' ? 'text-slate-200' : 'text-slate-950')}`} title={doc.filename}>
+                              {doc.filename}
+                            </p>
+                            <div className="flex items-center gap-2 mt-1 text-[10px]">
+                              <span className={`px-1.5 py-0.5 rounded font-mono font-bold ${theme === 'dark' ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-800 border border-slate-300'}`}>
+                                {doc.chunk_count} {doc.chunk_count === 1 ? 'chunk' : 'chunks'}
+                              </span>
+                              <span className={`uppercase text-[9px] font-bold ${theme === 'dark' ? 'text-slate-500' : 'text-slate-600'}`}>{doc.file_type}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteDocument(doc.doc_id, doc.filename);
+                          }}
+                          className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-rose-500 hover:bg-rose-100/50 rounded transition-opacity"
+                          title="Delete document"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </>
+        )}
+
+        {/* Tab 2: User Chat & Query History */}
+        {sidebarTab === 'history' && (
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <div className={`p-3 border-b flex items-center justify-between text-xs ${theme === 'dark' ? 'border-slate-800/80' : 'border-slate-200'}`}>
+              <div className="flex items-center gap-1.5 font-bold">
+                <Clock className="w-3.5 h-3.5 text-emerald-500" />
+                <span>Recent Queries</span>
+              </div>
+              {chatHistory.length > 0 && (
+                <button
+                  onClick={handleClearHistory}
+                  className="text-[11px] text-slate-500 hover:text-rose-500 transition-colors"
+                  title="Clear query history"
+                >
+                  Clear All
+                </button>
+              )}
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-3 space-y-2">
+              {historyLoading ? (
+                <div className="p-4 text-center text-xs text-slate-500">Loading history...</div>
+              ) : chatHistory.length === 0 ? (
+                <div className={`p-4 text-center text-xs rounded-xl border ${theme === 'dark' ? 'border-slate-800/80 text-slate-500 bg-slate-900/30' : 'border-slate-200 text-slate-500 bg-slate-50'}`}>
+                  <MessageSquare className="w-6 h-6 mx-auto mb-2 opacity-40 text-emerald-500" />
+                  <p className="font-semibold">No questions saved yet</p>
+                  <p className="text-[10px] mt-1">Ask any policy inquiry to automatically preserve your Q&amp;A history.</p>
+                </div>
+              ) : (
+                chatHistory.map((item, idx) => (
+                  <div
+                    key={item.id || idx}
+                    onClick={() => handleSelectHistoryItem(item)}
+                    className={`group p-2.5 rounded-xl border text-xs cursor-pointer transition-all ${
+                      theme === 'dark'
+                        ? 'bg-slate-900/60 border-slate-800/80 hover:border-emerald-500/50 hover:bg-slate-850'
+                        : 'bg-white border-slate-200 hover:border-emerald-500 hover:bg-emerald-50/40 shadow-xs'
+                    }`}
+                  >
+                    <div className="flex items-start gap-2">
+                      <MessageSquare className="w-3.5 h-3.5 text-emerald-500 mt-0.5 shrink-0" />
+                      <div className="flex-1 overflow-hidden">
+                        <p className={`font-semibold line-clamp-2 leading-snug ${theme === 'dark' ? 'text-slate-200 group-hover:text-emerald-300' : 'text-slate-900 group-hover:text-emerald-800'}`}>
+                          {item.question}
                         </p>
-                        <div className="flex items-center gap-2 mt-1 text-[10px]">
-                          <span className={`px-1.5 py-0.5 rounded font-mono font-bold ${theme === 'dark' ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-800 border border-slate-300'}`}>
-                            {doc.chunk_count} {doc.chunk_count === 1 ? 'chunk' : 'chunks'}
+                        <div className="flex items-center justify-between mt-1.5 text-[10px] text-slate-500">
+                          <span>
+                            {item.created_at ? new Date(item.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Saved'}
                           </span>
-                          <span className={`uppercase text-[9px] font-bold ${theme === 'dark' ? 'text-slate-500' : 'text-slate-600'}`}>{doc.file_type}</span>
+                          {item.citations && item.citations.length > 0 && (
+                            <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                              {item.citations.length} {item.citations.length === 1 ? 'cite' : 'cites'}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
-
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteDocument(doc.doc_id, doc.filename);
-                      }}
-                      className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-rose-500 hover:bg-rose-100/50 rounded transition-opacity"
-                      title="Delete document"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
                   </div>
-                </div>
-              );
-            })
-          )}
-        </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Free Tier Architecture Badges */}
         <div className={`p-3 border-t text-[11px] space-y-1 ${theme === 'dark' ? 'border-slate-800/80 bg-slate-950/50 text-slate-400' : 'border-slate-200 bg-white text-slate-800 font-semibold'}`}>
@@ -1477,6 +1669,78 @@ export default function App() {
                 title="Clear current conversation"
               >
                 Clear Chat
+              </button>
+            )}
+
+            {/* User Profile / Login Button */}
+            {currentUser ? (
+              <div className="relative">
+                <button
+                  onClick={() => setUserDropdownOpen(!userDropdownOpen)}
+                  className={`flex items-center gap-2 pl-2 pr-3 py-1 rounded-xl border text-xs font-semibold transition-all ${
+                    theme === 'dark'
+                      ? 'bg-slate-900 border-slate-750 text-slate-200 hover:border-emerald-500/50'
+                      : 'bg-white border-slate-300 text-slate-800 hover:border-emerald-600 shadow-xs'
+                  }`}
+                >
+                  <div className="w-6 h-6 rounded-lg bg-emerald-500 text-slate-950 font-bold flex items-center justify-center text-[11px] shrink-0">
+                    {(currentUser.user_metadata?.full_name || currentUser.email || 'U')[0].toUpperCase()}
+                  </div>
+                  <span className="max-w-[120px] truncate hidden sm:inline">
+                    {currentUser.user_metadata?.full_name || currentUser.email?.split('@')[0]}
+                  </span>
+                  <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${userDropdownOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {userDropdownOpen && (
+                  <>
+                    <div className="fixed inset-0 z-30" onClick={() => setUserDropdownOpen(false)} />
+                    <div
+                      className={`absolute right-0 top-full mt-1.5 w-56 rounded-xl border p-1.5 shadow-2xl z-40 animate-fade-in ${
+                        theme === 'dark' ? 'bg-[#0f172a] border-slate-700/90 text-slate-200 shadow-black/80' : 'bg-white border-slate-300 text-slate-900 shadow-slate-400/30'
+                      }`}
+                    >
+                      <div className="px-3 py-2 border-b border-slate-800/80">
+                        <p className="text-[10px] uppercase font-mono text-slate-500 font-bold">Signed In As</p>
+                        <p className="text-xs font-semibold truncate text-emerald-400" title={currentUser.email}>
+                          {currentUser.email}
+                        </p>
+                      </div>
+
+                      <button
+                        onClick={() => {
+                          setUserDropdownOpen(false);
+                          setSidebarOpen(true);
+                          setSidebarTab('history');
+                        }}
+                        className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors text-left ${
+                          theme === 'dark' ? 'hover:bg-slate-800 hover:text-emerald-300' : 'hover:bg-slate-100 hover:text-emerald-800'
+                        }`}
+                      >
+                        <History className="w-3.5 h-3.5 text-emerald-500" />
+                        <span>Query History ({chatHistory.length})</span>
+                      </button>
+
+                      <button
+                        onClick={handleSignOut}
+                        className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-rose-400 hover:text-rose-300 transition-colors text-left ${
+                          theme === 'dark' ? 'hover:bg-slate-800/80' : 'hover:bg-slate-100'
+                        }`}
+                      >
+                        <LogOut className="w-3.5 h-3.5" />
+                        <span>Sign Out</span>
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : (
+              <button
+                onClick={() => setAuthModalOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs transition-all shadow-sm"
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                <span>Sign In</span>
               </button>
             )}
           </div>
@@ -2033,6 +2297,14 @@ export default function App() {
         </div>
 
       </main>
+
+      {/* Authentication Modal (Email/Password & Google One-Click) */}
+      <AuthModal
+        isOpen={authModalOpen}
+        onClose={() => setAuthModalOpen(false)}
+        onAuthSuccess={handleAuthSuccess}
+        theme={theme}
+      />
     </div>
   );
 }

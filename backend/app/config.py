@@ -14,6 +14,11 @@ class Settings(BaseSettings):
     qdrant_api_key: str = ""
     qdrant_collection: str = "policy_documents"
 
+    # Supabase PostgreSQL & Auth settings (optional for multi-user mode)
+    supabase_url: str = ""
+    supabase_key: str = ""
+    supabase_jwt_secret: str = ""
+
     # Application limits and thresholds
     environment: str = "development"
     cors_origins: str = "*"  # Comma-separated domains e.g. "https://policypilot.vercel.app,http://localhost:3000" or "*"

@@ -79,6 +79,9 @@ export async function sendPasswordResetEmail(email) {
  */
 export async function resendVerificationEmail(email) {
   const cleanEmail = (email || '').trim().toLowerCase();
+  if (!cleanEmail) {
+    return { data: null, error: { message: 'Please enter a valid email address.' } };
+  }
   if (!isSupabaseConfigured()) {
     return { data: {}, error: null };
   }

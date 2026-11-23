@@ -938,11 +938,16 @@ export default function App() {
     // Inspect URL hash and query params for Supabase Auth redirect actions
     const hash = window.location.hash || '';
     const search = window.location.search || '';
-    const rawQuery = hash.startsWith('#') ? hash.substring(1) : search.startsWith('?') ? search.substring(1) : '';
-    const params = new URLSearchParams(rawQuery);
+    const hashClean = hash.startsWith('#') ? hash.substring(1) : hash;
+    const searchClean = search.startsWith('?') ? search.substring(1) : search;
+    const hashParams = new URLSearchParams(hashClean);
+    const searchParams = new URLSearchParams(searchClean);
 
-    const type = params.get('type') || '';
-    const errorDesc = params.get('error_description') || '';
+    const getParam = (key) => hashParams.get(key) || searchParams.get(key) || '';
+    const type = getParam('type');
+    const errorDesc = getParam('error_description');
+    const errorCode = getParam('error_code');
+    const errorParam = getParam('error');
 
     // 1. Password Recovery Flow (user clicked password reset link in email)
     if (type === 'recovery' || hash.includes('type=recovery') || search.includes('type=recovery')) {
@@ -953,7 +958,12 @@ export default function App() {
         title: '🔑 Set Your New Password',
         message: 'Please choose and confirm your new secure password below.'
       });
-      window.history.replaceState(null, '', window.location.pathname);
+      // Delay replacing state so Supabase JS client has sufficient time to complete token handshake
+      setTimeout(() => {
+        if (window.location.hash || window.location.search) {
+          window.history.replaceState(null, '', window.location.pathname);
+        }
+      }, 3500);
     }
     // 2. Email Confirmation Flow (user clicked verify email link)
     else if (
@@ -965,18 +975,31 @@ export default function App() {
       setAuthNotification({
         type: 'success',
         title: '🎉 Email Verified Successfully!',
-        message: 'Your email has been confirmed. Welcome to PolicyPilot Enterprise!'
+        message: 'Your email has been confirmed. You can now sign in to your PolicyPilot workspace!'
       });
-      window.history.replaceState(null, '', window.location.pathname);
+      setAuthInitialMode('login');
+      setAuthModalOpen(true);
+      setTimeout(() => {
+        if (window.location.hash || window.location.search) {
+          window.history.replaceState(null, '', window.location.pathname);
+        }
+      }, 3500);
     }
-    // 3. Auth Link Error (e.g. expired or invalid token)
-    else if (errorDesc || hash.includes('error_description=')) {
+    // 3. Auth Link Error (e.g. expired or invalid token or already used)
+    else if (errorDesc || errorCode || errorParam || hash.includes('error_description=')) {
+      const decodedError = decodeURIComponent((errorDesc || errorParam || 'This verification link is invalid or has expired.').replace(/\+/g, ' '));
       setAuthNotification({
         type: 'error',
-        title: '⚠️ Auth Link Notice',
-        message: decodeURIComponent((errorDesc || 'Link has expired or was already used.').replace(/\+/g, ' '))
+        title: '⚠️ Verification Link Notice',
+        message: `${decodedError} Please sign in below or request a new verification email.`
       });
-      window.history.replaceState(null, '', window.location.pathname);
+      setAuthInitialMode('login');
+      setAuthModalOpen(true);
+      setTimeout(() => {
+        if (window.location.hash || window.location.search) {
+          window.history.replaceState(null, '', window.location.pathname);
+        }
+      }, 3500);
     }
 
     // 4. Supabase Real-time Auth State Change Listener
@@ -1482,6 +1505,31 @@ export default function App() {
           theme={theme}
           toggleTheme={toggleTheme}
         />
+
+        {/* Global Auth Status Notification Toast on Landing Page */}
+        {authNotification && (
+          <div className="fixed top-5 right-5 z-[9999] max-w-sm sm:max-w-md p-4 rounded-2xl border shadow-2xl backdrop-blur-md flex items-start gap-3 animate-fade-in transition-all bg-slate-900/95 border-emerald-500/40 text-slate-100">
+            {authNotification.type === 'success' ? (
+              <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+            ) : authNotification.type === 'error' ? (
+              <AlertCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+            ) : (
+              <ShieldCheck className="w-5 h-5 text-teal-400 shrink-0 mt-0.5" />
+            )}
+            <div className="flex-1 text-xs">
+              <p className="font-bold text-sm text-emerald-400 mb-0.5">{authNotification.title}</p>
+              <p className="leading-relaxed text-slate-300">{authNotification.message}</p>
+            </div>
+            <button
+              onClick={() => setAuthNotification(null)}
+              className="p-1 rounded-lg text-slate-400 hover:text-white transition-colors cursor-pointer"
+              title="Dismiss notification"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
         <AuthModal
           isOpen={authModalOpen}
           onClose={() => setAuthModalOpen(false)}

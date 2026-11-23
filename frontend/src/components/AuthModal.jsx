@@ -134,17 +134,39 @@ export default function AuthModal({
       return;
     }
     setResending(true);
+    setErrorMsg('');
+    setSuccessMsg('');
     try {
       const { error } = await resendVerificationEmail(email.trim());
       if (error) {
-        setErrorMsg(error.message);
+        const rawMsg = (error.message || '').trim();
+        const lowerMsg = rawMsg.toLowerCase();
+        if (
+          lowerMsg.includes('rate') ||
+          lowerMsg.includes('60') ||
+          lowerMsg.includes('security') ||
+          lowerMsg.includes('over_email_send_rate_limit')
+        ) {
+          setErrorMsg(
+            'A verification email was recently dispatched. Supabase limits resending to once every 60 seconds. Please check your Inbox and Spam/Junk folder, or wait 60 seconds.'
+          );
+        } else if (lowerMsg.includes('already confirmed') || lowerMsg.includes('already verified')) {
+          setErrorMsg(
+            'This email is already verified! You can log in directly with your password, or use "Forgot Password?" below to reset your password.'
+          );
+          setShowResendOption(false);
+        } else {
+          setErrorMsg(rawMsg || 'Failed to send verification email. Please check your email address.');
+        }
       } else {
         setShowResendOption(false);
         setErrorMsg('');
-        setSuccessMsg('Verification email sent! Please check your inbox and spam folder.');
+        setSuccessMsg(
+          `Verification email dispatched to ${email.trim()}! Please check your Inbox and Spam/Junk folder.`
+        );
       }
     } catch (err) {
-      setErrorMsg('Failed to send verification email. Please try again.');
+      setErrorMsg('Failed to send verification email. Please try again later.');
     } finally {
       setResending(false);
     }
@@ -217,8 +239,11 @@ export default function AuthModal({
         if (error) {
           const rawMsg = (error.message || '').trim();
           const lowerMsg = rawMsg.toLowerCase();
-          if (lowerMsg.includes('invalid login credentials') || lowerMsg.includes('email not confirmed')) {
+          if (lowerMsg.includes('email not confirmed')) {
             setErrorMsg('Please verify your email to login.');
+            setShowResendOption(true);
+          } else if (lowerMsg.includes('invalid login credentials')) {
+            setErrorMsg('Invalid email or password. If your email is unverified, please verify it first.');
             setShowResendOption(true);
           } else {
             setErrorMsg(rawMsg);
@@ -428,14 +453,28 @@ export default function AuthModal({
               <div className="flex-1 leading-snug">
                 <div>{errorMsg}</div>
                 {showResendOption && email.trim() && (
-                  <button
-                    type="button"
-                    onClick={handleResendVerification}
-                    disabled={resending}
-                    className="mt-1.5 inline-flex items-center gap-1 font-semibold text-emerald-400 hover:text-emerald-300 underline cursor-pointer disabled:opacity-50"
-                  >
-                    {resending ? 'Sending verification email...' : 'Send verification email again'}
-                  </button>
+                  <div className="mt-2 flex flex-wrap items-center gap-2.5">
+                    <button
+                      type="button"
+                      onClick={handleResendVerification}
+                      disabled={resending}
+                      className="inline-flex items-center gap-1 font-semibold text-emerald-400 hover:text-emerald-300 underline cursor-pointer disabled:opacity-50"
+                    >
+                      {resending ? 'Sending verification email...' : 'Send verification email again'}
+                    </button>
+                    <span className="text-slate-500">•</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMode('forgot_password');
+                        setErrorMsg('');
+                        setSuccessMsg('');
+                      }}
+                      className="inline-flex items-center gap-1 text-slate-300 hover:text-white underline cursor-pointer"
+                    >
+                      Forgot password?
+                    </button>
+                  </div>
                 )}
               </div>
             </div>

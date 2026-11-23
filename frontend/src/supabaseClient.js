@@ -4,8 +4,8 @@
  */
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://tfzatlcopjuhtcxvwyhy.supabase.co';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_Cl2sT5DuueLO6Ynf1vukQw_pg-DzK_w';
 
 export const isSupabaseConfigured = () => {
   return Boolean(supabaseUrl && supabaseAnonKey && supabaseUrl.startsWith('http'));

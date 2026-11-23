@@ -15,6 +15,10 @@ services:
         sync: false
       - key: QDRANT_COLLECTION
         value: policy_documents
+      - key: VITE_SUPABASE_URL
+        value: https://tfzatlcopjuhtcxvwyhy.supabase.co
+      - key: VITE_SUPABASE_ANON_KEY
+        value: sb_publishable_Cl2sT5DuueLO6Ynf1vukQw_pg-DzK_w
       - key: ENVIRONMENT
         value: production
       - key: CORS_ORIGINS

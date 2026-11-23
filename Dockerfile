@@ -12,6 +12,8 @@ COPY frontend/package*.json ./
 RUN npm ci
 
 COPY frontend/ ./
+ENV VITE_SUPABASE_URL=https://tfzatlcopjuhtcxvwyhy.supabase.co \
+    VITE_SUPABASE_ANON_KEY=sb_publishable_Cl2sT5DuueLO6Ynf1vukQw_pg-DzK_w
 RUN npm run build
 
 # Stage 2: Ultra-lightweight Python Backend

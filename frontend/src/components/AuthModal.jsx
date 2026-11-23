@@ -12,8 +12,79 @@ import {
   ArrowLeft,
   KeyRound,
   Eye,
-  EyeOff
+  EyeOff,
+  ChevronDown
 } from 'lucide-react';
+
+const COUNTRY_CODES = [
+  { code: '+92', name: 'Pakistan', flag: '🇵🇰', iso: 'PK' },
+  { code: '+93', name: 'Afghanistan', flag: '🇦🇫', iso: 'AF' },
+  { code: '+355', name: 'Albania', flag: '🇦🇱', iso: 'AL' },
+  { code: '+213', name: 'Algeria', flag: '🇩🇿', iso: 'DZ' },
+  { code: '+54', name: 'Argentina', flag: '🇦🇷', iso: 'AR' },
+  { code: '+61', name: 'Australia', flag: '🇦🇺', iso: 'AU' },
+  { code: '+43', name: 'Austria', flag: '🇦🇹', iso: 'AT' },
+  { code: '+994', name: 'Azerbaijan', flag: '🇦🇿', iso: 'AZ' },
+  { code: '+973', name: 'Bahrain', flag: '🇧🇭', iso: 'BH' },
+  { code: '+880', name: 'Bangladesh', flag: '🇧🇩', iso: 'BD' },
+  { code: '+32', name: 'Belgium', flag: '🇧🇪', iso: 'BE' },
+  { code: '+55', name: 'Brazil', flag: '🇧🇷', iso: 'BR' },
+  { code: '+1', name: 'Canada', flag: '🇨🇦', iso: 'CA' },
+  { code: '+86', name: 'China', flag: '🇨🇳', iso: 'CN' },
+  { code: '+57', name: 'Colombia', flag: '🇨🇴', iso: 'CO' },
+  { code: '+45', name: 'Denmark', flag: '🇩🇰', iso: 'DK' },
+  { code: '+20', name: 'Egypt', flag: '🇪🇬', iso: 'EG' },
+  { code: '+358', name: 'Finland', flag: '🇫🇮', iso: 'FI' },
+  { code: '+33', name: 'France', flag: '🇫🇷', iso: 'FR' },
+  { code: '+49', name: 'Germany', flag: '🇩🇪', iso: 'DE' },
+  { code: '+30', name: 'Greece', flag: '🇬🇷', iso: 'GR' },
+  { code: '+852', name: 'Hong Kong', flag: '🇭🇰', iso: 'HK' },
+  { code: '+91', name: 'India', flag: '🇮🇳', iso: 'IN' },
+  { code: '+62', name: 'Indonesia', flag: '🇮🇩', iso: 'ID' },
+  { code: '+98', name: 'Iran', flag: '🇮🇷', iso: 'IR' },
+  { code: '+964', name: 'Iraq', flag: '🇮🇶', iso: 'IQ' },
+  { code: '+353', name: 'Ireland', flag: '🇮🇪', iso: 'IE' },
+  { code: '+39', name: 'Italy', flag: '🇮🇹', iso: 'IT' },
+  { code: '+81', name: 'Japan', flag: '🇯🇵', iso: 'JP' },
+  { code: '+962', name: 'Jordan', flag: '🇯🇴', iso: 'JO' },
+  { code: '+7', name: 'Kazakhstan', flag: '🇰🇿', iso: 'KZ' },
+  { code: '+254', name: 'Kenya', flag: '🇰🇪', iso: 'KE' },
+  { code: '+965', name: 'Kuwait', flag: '🇰🇼', iso: 'KW' },
+  { code: '+961', name: 'Lebanon', flag: '🇱🇧', iso: 'LB' },
+  { code: '+60', name: 'Malaysia', flag: '🇲🇾', iso: 'MY' },
+  { code: '+52', name: 'Mexico', flag: '🇲🇽', iso: 'MX' },
+  { code: '+212', name: 'Morocco', flag: '🇲🇦', iso: 'MA' },
+  { code: '+977', name: 'Nepal', flag: '🇳🇵', iso: 'NP' },
+  { code: '+31', name: 'Netherlands', flag: '🇳🇱', iso: 'NL' },
+  { code: '+64', name: 'New Zealand', flag: '🇳🇿', iso: 'NZ' },
+  { code: '+234', name: 'Nigeria', flag: '🇳🇬', iso: 'NG' },
+  { code: '+47', name: 'Norway', flag: '🇳🇴', iso: 'NO' },
+  { code: '+968', name: 'Oman', flag: '🇴🇲', iso: 'OM' },
+  { code: '+63', name: 'Philippines', flag: '🇵🇭', iso: 'PH' },
+  { code: '+48', name: 'Poland', flag: '🇵🇱', iso: 'PL' },
+  { code: '+351', name: 'Portugal', flag: '🇵🇹', iso: 'PT' },
+  { code: '+974', name: 'Qatar', flag: '🇶🇦', iso: 'QA' },
+  { code: '+40', name: 'Romania', flag: '🇷🇴', iso: 'RO' },
+  { code: '+7', name: 'Russia', flag: '🇷🇺', iso: 'RU' },
+  { code: '+966', name: 'Saudi Arabia', flag: '🇸🇦', iso: 'SA' },
+  { code: '+65', name: 'Singapore', flag: '🇸🇬', iso: 'SG' },
+  { code: '+27', name: 'South Africa', flag: '🇿🇦', iso: 'ZA' },
+  { code: '+82', name: 'South Korea', flag: '🇰🇷', iso: 'KR' },
+  { code: '+34', name: 'Spain', flag: '🇪🇸', iso: 'ES' },
+  { code: '+94', name: 'Sri Lanka', flag: '🇱🇰', iso: 'LK' },
+  { code: '+46', name: 'Sweden', flag: '🇸🇪', iso: 'SE' },
+  { code: '+41', name: 'Switzerland', flag: '🇨🇭', iso: 'CH' },
+  { code: '+886', name: 'Taiwan', flag: '🇹🇼', iso: 'TW' },
+  { code: '+66', name: 'Thailand', flag: '🇹🇭', iso: 'TH' },
+  { code: '+90', name: 'Turkey', flag: '🇹🇷', iso: 'TR' },
+  { code: '+380', name: 'Ukraine', flag: '🇺🇦', iso: 'UA' },
+  { code: '+971', name: 'United Arab Emirates', flag: '🇦🇪', iso: 'AE' },
+  { code: '+44', name: 'United Kingdom', flag: '🇬🇧', iso: 'GB' },
+  { code: '+1', name: 'United States', flag: '🇺🇸', iso: 'US' },
+  { code: '+998', name: 'Uzbekistan', flag: '🇺🇿', iso: 'UZ' },
+  { code: '+84', name: 'Vietnam', flag: '🇻🇳', iso: 'VN' },
+  { code: '+967', name: 'Yemen', flag: '🇾🇪', iso: 'YE' }
+];
 import {
   signInUser,
   signUpUser,
@@ -33,6 +104,7 @@ export default function AuthModal({
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [fullName, setFullName] = useState('');
+  const [countryCode, setCountryCode] = useState('+92'); // Default Pakistan (+92)
   const [contactNumber, setContactNumber] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -82,11 +154,13 @@ export default function AuthModal({
           return;
         }
 
+        const formattedPhone = contactNumber.trim() ? `${countryCode} ${contactNumber.trim()}` : '';
+
         const { data, error } = await signUpUser(
           email.trim(),
           password,
           fullName.trim(),
-          contactNumber.trim()
+          formattedPhone
         );
 
         if (error) {
@@ -317,7 +391,7 @@ export default function AuthModal({
                       required
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
-                      placeholder="Jane Doe"
+                      placeholder="Qudrat Ullah"
                       className={`w-full pl-10 pr-3 py-2 text-xs rounded-xl border focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-colors ${
                         theme === 'dark'
                           ? 'bg-slate-900/90 border-slate-700 text-slate-100 placeholder-slate-500'
@@ -327,24 +401,52 @@ export default function AuthModal({
                   </div>
                 </div>
 
-                {/* Contact Number */}
+                {/* Contact Number with Country Code Dropdown (Default: Pakistan +92) */}
                 <div>
                   <label className={`block text-[11px] font-semibold mb-1 ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>
                     Contact Number
                   </label>
-                  <div className="relative flex items-center">
-                    <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-                    <input
-                      type="tel"
-                      value={contactNumber}
-                      onChange={(e) => setContactNumber(e.target.value)}
-                      placeholder="+1 (555) 000-1234"
-                      className={`w-full pl-10 pr-3 py-2 text-xs rounded-xl border focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-colors ${
-                        theme === 'dark'
-                          ? 'bg-slate-900/90 border-slate-700 text-slate-100 placeholder-slate-500'
-                          : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
-                      }`}
-                    />
+                  <div className="flex gap-1.5 items-center">
+                    {/* Country Code Select */}
+                    <div className="relative w-[112px] shrink-0">
+                      <select
+                        value={countryCode}
+                        onChange={(e) => setCountryCode(e.target.value)}
+                        className={`w-full py-2 pl-2 pr-6 text-xs rounded-xl border focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-colors cursor-pointer appearance-none truncate font-medium ${
+                          theme === 'dark'
+                            ? 'bg-slate-900/90 border-slate-700 text-slate-100'
+                            : 'bg-white border-slate-300 text-slate-900'
+                        }`}
+                        title="Select Country Calling Code"
+                      >
+                        {COUNTRY_CODES.map((c) => (
+                          <option
+                            key={`${c.iso}-${c.code}`}
+                            value={c.code}
+                            className={theme === 'dark' ? 'bg-slate-900 text-slate-100' : 'bg-white text-slate-900'}
+                          >
+                            {c.flag} {c.code} ({c.name})
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                    </div>
+
+                    {/* Rest of Phone Number Input */}
+                    <div className="relative flex-1 flex items-center">
+                      <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                      <input
+                        type="tel"
+                        value={contactNumber}
+                        onChange={(e) => setContactNumber(e.target.value.replace(/[^0-9\s-]/g, ''))}
+                        placeholder={countryCode === '+92' ? '300 1234567' : '123 4567890'}
+                        className={`w-full pl-8 pr-3 py-2 text-xs rounded-xl border focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-colors ${
+                          theme === 'dark'
+                            ? 'bg-slate-900/90 border-slate-700 text-slate-100 placeholder-slate-500'
+                            : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
+                        }`}
+                      />
+                    </div>
                   </div>
                 </div>
               </div>

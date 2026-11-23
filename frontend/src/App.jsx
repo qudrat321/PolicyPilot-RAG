@@ -184,18 +184,50 @@ function convertTextToTableRows(question, answer, citations) {
 function cleanMarkdownArtifacts(str) {
   if (!str) return '';
   let s = String(str)
-    // Strip code blocks first
+    // 1. Strip raw code blocks and mermaid diagrams
     .replace(/```[a-z]*\n?[\s\S]*?\n```/g, ' ')
-    // Strip bold & italic markdown markers
+    // 2. Convert LaTeX Math formulas into clean readable plain text
+    .replace(/\\\[\s*/g, '')
+    .replace(/\s*\\\]/g, '')
+    .replace(/\\\(\s*/g, '')
+    .replace(/\s*\\\)/g, '')
+    .replace(/\$\$+/g, '')
+    .replace(/\\text\{([^}]+)\}/g, '$1')
+    .replace(/\\times\b/g, 'x')
+    .replace(/\\cdot\b/g, '*')
+    .replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '($1 / $2)')
+    .replace(/\\le\b/g, '<=')
+    .replace(/\\ge\b/g, '>=')
+    .replace(/\\approx\b/g, '~=')
+    .replace(/\\[a-zA-Z]+/g, ' ')
+    // 3. Normalize all Unicode whitespace and zero-width characters (prevents jsPDF '/' corruption)
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .replace(/[\u202F\u00A0\u2000-\u200A]/g, ' ')
+    // 4. Normalize typographic punctuation to safe standard ASCII
+    .replace(/[\u2018\u2019\u201A\u201B]/g, "'")
+    .replace(/[\u201C\u201D\u201E\u201F]/g, '"')
+    .replace(/[\u2013\u2014\u2015]/g, ' - ')
+    .replace(/[\u2010\u2011\u2012]/g, '-')
+    .replace(/[\u00D7]/g, 'x')
+    .replace(/[\u00F7]/g, '/')
+    // 5. Clean up stray leading slashes before citation brackets or numbers
+    .replace(/\/+(\[\d+\])/g, '$1')
+    .replace(/\/+(\d+)\s*\/+(\w+)/g, '$1 $2')
+    .replace(/\/+(\d+)/g, '$1')
+    // 6. Strip bold, italic, and inline markdown markers
     .replace(/\*\*+(.*?)\*\*+/gs, '$1')
     .replace(/\*+(.*?)\*+/gs, '$1')
     .replace(/__+(.*?)__+/gs, '$1')
+    .replace(/_([^_]+)_/gs, '$1')
     .replace(/`([^`]+)`/gs, '$1')
-    // Remove any leftover or stray asterisks, hashes, backticks, tildes (preserve underscores in identifiers)
+    // 7. Strip leftover asterisks, hashes, backticks, tildes
     .replace(/[*`#~]/g, '')
-    // Normalize newlines and whitespace
-    .replace(/[\r\n\t]+/g, ' ')
+    // 8. Strip non-printable control characters
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, '')
+    // 9. Normalize whitespace and trim
+    .replace(/\s+/g, ' ')
     .trim();
+
   // If the cell contains only punctuation/bullets/spaces, treat as empty
   if (/^[\-_•\s.:,;]+$/.test(s)) {
     return '';
@@ -424,7 +456,8 @@ function parseDocumentBlocks(text) {
   let i = 0;
 
   while (i < lines.length) {
-    const line = lines[i].trim();
+    const rawLine = lines[i];
+    const line = rawLine.trim();
 
     if (!line) {
       i++;
@@ -463,13 +496,14 @@ function parseDocumentBlocks(text) {
       continue;
     }
 
-    // 3. Bullets (*, -, +, \d+\.)
-    if (/^[\*\-\+]\s+/.test(line) || /^\d+\.\s+/.test(line)) {
+    // 3. Bullets (*, -, +, \d+\.) - check indentation for sub-bullets
+    if (/^\s*[\*\-\+]\s+/.test(rawLine) || /^\s*\d+\.\s+/.test(rawLine)) {
+      const isIndented = /^\s{2,}/.test(rawLine);
       const cleanBullet = cleanMarkdownArtifacts(
         line.replace(/^[\*\-\+]\s+/, '').replace(/^\d+\.\s+/, '')
       );
       if (cleanBullet) {
-        blocks.push({ type: 'bullet', text: cleanBullet });
+        blocks.push({ type: 'bullet', text: cleanBullet, indent: isIndented });
       }
       i++;
       continue;
@@ -479,8 +513,9 @@ function parseDocumentBlocks(text) {
     let paraText = line;
     i++;
     while (i < lines.length) {
-      const nextL = lines[i].trim();
-      if (!nextL || nextL.startsWith('|') || nextL.startsWith('#') || /^[\*\-\+]\s+/.test(nextL) || /^\d+\.\s+/.test(nextL)) {
+      const nextRaw = lines[i];
+      const nextL = nextRaw.trim();
+      if (!nextL || nextL.startsWith('|') || nextL.startsWith('#') || /^\s*[\*\-\+]\s+/.test(nextRaw) || /^\s*\d+\.\s+/.test(nextRaw)) {
         break;
       }
       paraText += ' ' + nextL;
@@ -788,25 +823,29 @@ const exportToPdf = (question, answer, citations, docScopeName = 'All Policy Doc
       return;
     }
 
-    // B. Bullet List Items
+    // B. Bullet List Items (Crisp native vector bullets, sub-bullet indentations & reliable line metrics)
     if (b.type === 'bullet') {
-      const bulletLines = doc.splitTextToSize(b.text, contentWidth - 14);
+      const indentOffset = b.indent ? 12 : 0;
+      const bulletWidth = contentWidth - 14 - indentOffset;
+      const bulletLines = doc.splitTextToSize(b.text, bulletWidth);
       bulletLines.forEach((bLine, bIdx) => {
         if (cursorY > pageHeight - margin - 25) {
           doc.addPage();
           cursorY = margin + 20;
         }
         if (bIdx === 0) {
-          doc.setFont('helvetica', 'bold');
-          doc.setFontSize(9);
-          doc.setTextColor(16, 185, 129); // emerald bullet symbol
-          doc.text('•', margin + 2, cursorY);
+          doc.setFillColor(16, 185, 129); // emerald-500
+          if (b.indent) {
+            doc.circle(margin + 5 + indentOffset, cursorY - 2.5, 1.2, 'F');
+          } else {
+            doc.circle(margin + 5, cursorY - 2.8, 1.8, 'F');
+          }
         }
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(9);
         doc.setTextColor(30, 41, 59);
-        doc.text(bLine, margin + 14, cursorY);
-        cursorY += 13;
+        doc.text(bLine, margin + 14 + indentOffset, cursorY);
+        cursorY += 13.5;
       });
       cursorY += 2;
       return;

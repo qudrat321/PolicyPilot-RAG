@@ -38,6 +38,7 @@ import {
   MessageSquare
 } from 'lucide-react';
 import AuthModal from './components/AuthModal';
+import LandingPage from './components/LandingPage';
 import {
   getActiveUser,
   signOutUser,
@@ -888,8 +889,10 @@ export default function App() {
   const [copiedId, setCopiedId] = useState(null);
 
   // Authentication & Chat History state
+  const [authInitialized, setAuthInitialized] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authInitialMode, setAuthInitialMode] = useState('login');
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const [sidebarTab, setSidebarTab] = useState('documents'); // 'documents' | 'history'
   const [chatHistory, setChatHistory] = useState([]);
@@ -919,10 +922,14 @@ export default function App() {
   }, []);
 
   const initUser = async () => {
-    const user = await getActiveUser();
-    setCurrentUser(user);
-    if (user?.id) {
-      loadHistory(user.id);
+    try {
+      const user = await getActiveUser();
+      setCurrentUser(user);
+      if (user?.id) {
+        loadHistory(user.id);
+      }
+    } finally {
+      setAuthInitialized(true);
     }
   };
 
@@ -1016,6 +1023,11 @@ export default function App() {
   };
 
   const handleFileUpload = async (file) => {
+    if (!currentUser) {
+      setAuthInitialMode('login');
+      setAuthModalOpen(true);
+      return;
+    }
     if (!file) return;
     setUploadLoading(true);
     setUploadNotice(null);
@@ -1066,6 +1078,11 @@ export default function App() {
   };
 
   const executeAskQuery = async (query, baseMessages) => {
+    if (!currentUser) {
+      setAuthInitialMode('login');
+      setAuthModalOpen(true);
+      return;
+    }
     setLoading(true);
     try {
       const payload = {
@@ -1301,6 +1318,47 @@ export default function App() {
   const activeDocName = selectedDocId === 'all'
     ? (documents.length > 0 ? `All Documents (${documents.length})` : 'All Documents')
     : documents.find(d => d.doc_id === selectedDocId)?.filename || 'Selected Policy';
+
+  if (!authInitialized) {
+    return (
+      <div className={`min-h-screen flex items-center justify-center font-sans ${theme === 'dark' ? 'bg-[#090d16] text-emerald-400' : 'bg-slate-50 text-emerald-600'}`}>
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-9 h-9 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+          <span className="font-mono text-xs tracking-wider uppercase font-semibold text-slate-400">Verifying Identity & Workspace...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!currentUser) {
+    return (
+      <>
+        <LandingPage
+          onExplore={() => {
+            setAuthInitialMode('login');
+            setAuthModalOpen(true);
+          }}
+          onLogin={() => {
+            setAuthInitialMode('login');
+            setAuthModalOpen(true);
+          }}
+          onRegister={() => {
+            setAuthInitialMode('register');
+            setAuthModalOpen(true);
+          }}
+          theme={theme}
+          toggleTheme={toggleTheme}
+        />
+        <AuthModal
+          isOpen={authModalOpen}
+          onClose={() => setAuthModalOpen(false)}
+          onAuthSuccess={handleAuthSuccess}
+          initialMode={authInitialMode}
+          theme={theme}
+        />
+      </>
+    );
+  }
 
   return (
     <div className={`flex h-screen font-sans antialiased overflow-hidden ${theme === 'dark' ? 'bg-[#07090e] text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
@@ -2303,6 +2361,7 @@ export default function App() {
         isOpen={authModalOpen}
         onClose={() => setAuthModalOpen(false)}
         onAuthSuccess={handleAuthSuccess}
+        initialMode={authInitialMode}
         theme={theme}
       />
     </div>

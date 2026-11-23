@@ -27,12 +27,19 @@ export const supabase = isSupabaseConfigured()
 // ==============================================================================
 
 /**
- * Register a new user with email, password, and full name.
+ * Register a new user with email, password, full name, and contact number.
  */
-export async function signUpUser(email, password, fullName) {
+export async function signUpUser(email, password, fullName, contactNumber = '') {
   if (!isSupabaseConfigured()) {
     // Local development fallback
-    const mockUser = { id: 'mock-user-1', email, user_metadata: { full_name: fullName } };
+    const mockUser = {
+      id: 'mock-user-1',
+      email,
+      user_metadata: {
+        full_name: fullName,
+        contact_number: contactNumber
+      }
+    };
     localStorage.setItem('policypilot_mock_user', JSON.stringify(mockUser));
     return { data: { user: mockUser }, error: null };
   }
@@ -43,8 +50,23 @@ export async function signUpUser(email, password, fullName) {
     options: {
       data: {
         full_name: fullName || email.split('@')[0],
+        contact_number: contactNumber || '',
       },
     },
+  });
+  return { data, error };
+}
+
+/**
+ * Send password reset email to user's registered email address.
+ */
+export async function sendPasswordResetEmail(email) {
+  if (!isSupabaseConfigured()) {
+    return { data: {}, error: null };
+  }
+
+  const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${window.location.origin}`,
   });
   return { data, error };
 }

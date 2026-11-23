@@ -10,7 +10,9 @@ import {
   Loader2,
   ShieldCheck,
   ArrowLeft,
-  KeyRound
+  KeyRound,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import {
   signInUser,
@@ -32,6 +34,8 @@ export default function AuthModal({
   const [confirmPassword, setConfirmPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [contactNumber, setContactNumber] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
@@ -42,6 +46,8 @@ export default function AuthModal({
       setMode(initialMode);
       setErrorMsg('');
       setSuccessMsg('');
+      setShowPassword(false);
+      setShowConfirmPassword(false);
     }
   }, [isOpen, initialMode]);
 
@@ -244,6 +250,8 @@ export default function AuthModal({
                   setMode('login');
                   setErrorMsg('');
                   setSuccessMsg('');
+                  setShowPassword(false);
+                  setShowConfirmPassword(false);
                 }}
                 className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all ${
                   mode === 'login'
@@ -261,6 +269,8 @@ export default function AuthModal({
                   setMode('register');
                   setErrorMsg('');
                   setSuccessMsg('');
+                  setShowPassword(false);
+                  setShowConfirmPassword(false);
                 }}
                 className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all ${
                   mode === 'register'
@@ -384,17 +394,27 @@ export default function AuthModal({
                 <div className="relative flex items-center">
                   <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                   <input
-                    type="password"
+                    type={showPassword ? 'text' : 'password'}
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
-                    className={`w-full pl-10 pr-3 py-2 text-xs rounded-xl border focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-colors ${
+                    className={`w-full pl-10 pr-10 py-2 text-xs rounded-xl border focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-colors ${
                       theme === 'dark'
                         ? 'bg-slate-900/90 border-slate-700 text-slate-100 placeholder-slate-500'
                         : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
                     }`}
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(prev => !prev)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-emerald-400 transition-colors p-0.5 cursor-pointer"
+                    title={showPassword ? 'Hide password' : 'View password'}
+                    aria-label={showPassword ? 'Hide password' : 'View password'}
+                    tabIndex={-1}
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
                 </div>
               </div>
             )}
@@ -409,17 +429,27 @@ export default function AuthModal({
                   <div className="relative flex items-center">
                     <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                     <input
-                      type="password"
+                      type={showPassword ? 'text' : 'password'}
                       required
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="Min. 6 chars"
-                      className={`w-full pl-10 pr-3 py-2 text-xs rounded-xl border focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-colors ${
+                      className={`w-full pl-10 pr-10 py-2 text-xs rounded-xl border focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-colors ${
                         theme === 'dark'
                           ? 'bg-slate-900/90 border-slate-700 text-slate-100 placeholder-slate-500'
                           : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
                       }`}
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(prev => !prev)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-emerald-400 transition-colors p-0.5 cursor-pointer"
+                      title={showPassword ? 'Hide password' : 'View password'}
+                      aria-label={showPassword ? 'Hide password' : 'View password'}
+                      tabIndex={-1}
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
                   </div>
                 </div>
 
@@ -430,17 +460,27 @@ export default function AuthModal({
                   <div className="relative flex items-center">
                     <KeyRound className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                     <input
-                      type="password"
+                      type={showConfirmPassword ? 'text' : 'password'}
                       required
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       placeholder="Re-enter password"
-                      className={`w-full pl-10 pr-3 py-2 text-xs rounded-xl border focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-colors ${
+                      className={`w-full pl-10 pr-10 py-2 text-xs rounded-xl border focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-colors ${
                         theme === 'dark'
                           ? 'bg-slate-900/90 border-slate-700 text-slate-100 placeholder-slate-500'
                           : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
                       }`}
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(prev => !prev)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-emerald-400 transition-colors p-0.5 cursor-pointer"
+                      title={showConfirmPassword ? 'Hide password' : 'View password'}
+                      aria-label={showConfirmPassword ? 'Hide password' : 'View password'}
+                      tabIndex={-1}
+                    >
+                      {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
                   </div>
                 </div>
               </div>

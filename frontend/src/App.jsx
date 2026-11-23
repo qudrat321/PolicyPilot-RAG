@@ -38,6 +38,7 @@ import {
   MessageSquare
 } from 'lucide-react';
 import AuthModal from './components/AuthModal';
+import LandingPage from './components/LandingPage';
 import {
   getActiveUser,
   signOutUser,
@@ -888,8 +889,10 @@ export default function App() {
   const [copiedId, setCopiedId] = useState(null);
 
   // Authentication & Chat History state
+  const [authInitialized, setAuthInitialized] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authInitialMode, setAuthInitialMode] = useState('login');
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const [sidebarTab, setSidebarTab] = useState('documents'); // 'documents' | 'history'
   const [chatHistory, setChatHistory] = useState([]);
@@ -919,10 +922,14 @@ export default function App() {
   }, []);
 
   const initUser = async () => {
-    const user = await getActiveUser();
-    setCurrentUser(user);
-    if (user?.id) {
-      loadHistory(user.id);
+    try {
+      const user = await getActiveUser();
+      setCurrentUser(user);
+      if (user?.id) {
+        loadHistory(user.id);
+      }
+    } finally {
+      setAuthInitialized(true);
     }
   };
 
@@ -1016,6 +1023,11 @@ export default function App() {
   };
 
   const handleFileUpload = async (file) => {
+    if (!currentUser) {
+      setAuthInitialMode('login');
+      setAuthModalOpen(true);
+      return;
+    }
     if (!file) return;
     setUploadLoading(true);
     setUploadNotice(null);
@@ -1066,6 +1078,49 @@ export default function App() {
   };
 
   const executeAskQuery = async (query, baseMessages) => {
+    if (!currentUser) {
+      setAuthInitialMode('login');
+      setAuthModalOpen(true);
+      return;
+    }
+
+    // Professional Query Deduplication & History Cache Check
+    const normalizeQuery = (q) => (q || '').trim().toLowerCase().replace(/[?.,!]+$/, '').trim();
+    const normalizedInput = normalizeQuery(query);
+
+    const cachedTurn = chatHistory.find(
+      item => normalizeQuery(item.question) === normalizedInput && !item.is_refusal && item.answer
+    );
+
+    if (cachedTurn) {
+      // Instant cache hit: Return verified answer in < 5ms without burning LLM tokens
+      const cachedAssistantMsg = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: cachedTurn.answer,
+        is_refusal: false,
+        citations: cachedTurn.citations || [],
+        retrieved_chunks: cachedTurn.retrieved_chunks || [],
+        is_cached: true,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      };
+
+      setMessages([...baseMessages, cachedAssistantMsg]);
+      const targetUserId = currentUser?.id || 'guest';
+
+      // ⚡ Optimistic Instant History Update (0ms UI latency)
+      setChatHistory(prev => {
+        const normQ = query.trim().toLowerCase();
+        const existing = prev.find(item => item.question?.trim().toLowerCase() === normQ) || cachedTurn;
+        const filtered = prev.filter(item => item.question?.trim().toLowerCase() !== normQ);
+        return [{ ...existing, created_at: new Date().toISOString() }, ...filtered].slice(0, 50);
+      });
+
+      // Background persist without UI blocking
+      saveChatTurnToDatabase(targetUserId, query, cachedTurn.answer, cachedTurn.citations, false).catch(console.warn);
+      return;
+    }
+
     setLoading(true);
     try {
       const payload = {
@@ -1105,10 +1160,26 @@ export default function App() {
 
       setMessages([...baseMessages, assistantMessage]);
 
-      // Save turn to database for the active user (or guest local storage)
+      // ⚡ Optimistic Instant History Update (0ms UI latency)
       const targetUserId = currentUser?.id || 'guest';
-      saveChatTurnToDatabase(targetUserId, query, data.answer, data.citations, data.is_refusal);
-      loadHistory(targetUserId);
+      const newHistoryItem = {
+        id: Date.now().toString(),
+        user_id: targetUserId,
+        session_id: 'default',
+        question: query.trim(),
+        answer: data.answer,
+        citations: data.citations || [],
+        is_refusal: Boolean(data.is_refusal),
+        created_at: new Date().toISOString()
+      };
+      setChatHistory(prev => {
+        const normQ = query.trim().toLowerCase();
+        const filtered = prev.filter(item => item.question?.trim().toLowerCase() !== normQ);
+        return [newHistoryItem, ...filtered].slice(0, 50);
+      });
+
+      // Background sync to database
+      saveChatTurnToDatabase(targetUserId, query, data.answer, data.citations, data.is_refusal).catch(console.warn);
     } catch (err) {
       const errorMessage = {
         id: (Date.now() + 1).toString(),
@@ -1301,6 +1372,47 @@ export default function App() {
   const activeDocName = selectedDocId === 'all'
     ? (documents.length > 0 ? `All Documents (${documents.length})` : 'All Documents')
     : documents.find(d => d.doc_id === selectedDocId)?.filename || 'Selected Policy';
+
+  if (!authInitialized) {
+    return (
+      <div className={`min-h-screen flex items-center justify-center font-sans ${theme === 'dark' ? 'bg-[#090d16] text-emerald-400' : 'bg-slate-50 text-emerald-600'}`}>
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-9 h-9 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+          <span className="font-mono text-xs tracking-wider uppercase font-semibold text-slate-400">Verifying Identity & Workspace...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!currentUser) {
+    return (
+      <>
+        <LandingPage
+          onExplore={() => {
+            setAuthInitialMode('login');
+            setAuthModalOpen(true);
+          }}
+          onLogin={() => {
+            setAuthInitialMode('login');
+            setAuthModalOpen(true);
+          }}
+          onRegister={() => {
+            setAuthInitialMode('register');
+            setAuthModalOpen(true);
+          }}
+          theme={theme}
+          toggleTheme={toggleTheme}
+        />
+        <AuthModal
+          isOpen={authModalOpen}
+          onClose={() => setAuthModalOpen(false)}
+          onAuthSuccess={handleAuthSuccess}
+          initialMode={authInitialMode}
+          theme={theme}
+        />
+      </>
+    );
+  }
 
   return (
     <div className={`flex h-screen font-sans antialiased overflow-hidden ${theme === 'dark' ? 'bg-[#07090e] text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
@@ -1584,6 +1696,83 @@ export default function App() {
             <span className={`text-[10px] font-mono font-bold ${theme === 'dark' ? 'text-blue-500' : 'text-blue-700'}`}>SHA-256</span>
           </div>
         </div>
+
+        {/* User Profile Card at Sidebar Bottom */}
+        {currentUser && (
+          <div className={`p-3 border-t relative shrink-0 ${theme === 'dark' ? 'border-slate-800/80 bg-slate-950/80' : 'border-slate-200 bg-slate-50'}`}>
+            <div className="relative">
+              <button
+                onClick={() => setUserDropdownOpen(!userDropdownOpen)}
+                className={`w-full flex items-center justify-between p-2 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
+                  theme === 'dark'
+                    ? 'bg-slate-900 border-slate-750 text-slate-200 hover:border-emerald-500/50 hover:bg-slate-850'
+                    : 'bg-white border-slate-300 text-slate-800 hover:border-emerald-600 hover:bg-slate-100 shadow-xs'
+                }`}
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-7 h-7 rounded-lg bg-emerald-500 text-slate-950 font-bold flex items-center justify-center text-xs shrink-0 shadow-xs">
+                    {(currentUser.user_metadata?.full_name || currentUser.email || 'U')[0].toUpperCase()}
+                  </div>
+                  <div className="truncate text-left leading-tight">
+                    <div className="truncate font-bold text-xs">
+                      {currentUser.user_metadata?.full_name || currentUser.email?.split('@')[0]}
+                    </div>
+                    <div className={`truncate text-[10px] font-mono ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
+                      {currentUser.email}
+                    </div>
+                  </div>
+                </div>
+                <ChevronDown className={`w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform ${userDropdownOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {/* Profile Dropdown Menu (Opens upwards above the profile card) */}
+              {userDropdownOpen && (
+                <>
+                  <div className="fixed inset-0 z-30" onClick={() => setUserDropdownOpen(false)} />
+                  <div
+                    className={`absolute left-0 bottom-full mb-2 w-full rounded-xl border p-1.5 shadow-2xl z-40 animate-fade-in ${
+                      theme === 'dark' ? 'bg-[#0f172a] border-slate-700/90 text-slate-200 shadow-black/80' : 'bg-white border-slate-300 text-slate-900 shadow-slate-400/30'
+                    }`}
+                  >
+                    <div className={`px-3 py-2 border-b text-xs mb-1 ${theme === 'dark' ? 'border-slate-800' : 'border-slate-200'}`}>
+                      <p className="font-bold truncate">{currentUser.user_metadata?.full_name || 'Enterprise User'}</p>
+                      <p className="text-[10px] font-mono truncate text-emerald-400">{currentUser.email}</p>
+                      {currentUser.user_metadata?.contact_number && (
+                        <p className={`text-[10px] font-mono truncate mt-0.5 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
+                          📞 {currentUser.user_metadata.contact_number}
+                        </p>
+                      )}
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        setUserDropdownOpen(false);
+                        setSidebarTab('history');
+                      }}
+                      className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors text-left cursor-pointer ${
+                        theme === 'dark' ? 'hover:bg-slate-800 hover:text-emerald-300' : 'hover:bg-slate-100 hover:text-emerald-800'
+                      }`}
+                    >
+                      <History className="w-3.5 h-3.5 text-emerald-500" />
+                      <span>Query History ({chatHistory.length})</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setUserDropdownOpen(false);
+                        handleSignOut();
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 transition-colors text-left cursor-pointer"
+                    >
+                      <LogOut className="w-3.5 h-3.5" />
+                      <span>Sign Out</span>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
       </aside>
 
       {/* ================= MAIN CHAT AREA (CLAUDE CODE STYLE) ================= */}
@@ -1672,72 +1861,11 @@ export default function App() {
               </button>
             )}
 
-            {/* User Profile / Login Button */}
-            {currentUser ? (
-              <div className="relative">
-                <button
-                  onClick={() => setUserDropdownOpen(!userDropdownOpen)}
-                  className={`flex items-center gap-2 pl-2 pr-3 py-1 rounded-xl border text-xs font-semibold transition-all ${
-                    theme === 'dark'
-                      ? 'bg-slate-900 border-slate-750 text-slate-200 hover:border-emerald-500/50'
-                      : 'bg-white border-slate-300 text-slate-800 hover:border-emerald-600 shadow-xs'
-                  }`}
-                >
-                  <div className="w-6 h-6 rounded-lg bg-emerald-500 text-slate-950 font-bold flex items-center justify-center text-[11px] shrink-0">
-                    {(currentUser.user_metadata?.full_name || currentUser.email || 'U')[0].toUpperCase()}
-                  </div>
-                  <span className="max-w-[120px] truncate hidden sm:inline">
-                    {currentUser.user_metadata?.full_name || currentUser.email?.split('@')[0]}
-                  </span>
-                  <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${userDropdownOpen ? 'rotate-180' : ''}`} />
-                </button>
-
-                {userDropdownOpen && (
-                  <>
-                    <div className="fixed inset-0 z-30" onClick={() => setUserDropdownOpen(false)} />
-                    <div
-                      className={`absolute right-0 top-full mt-1.5 w-56 rounded-xl border p-1.5 shadow-2xl z-40 animate-fade-in ${
-                        theme === 'dark' ? 'bg-[#0f172a] border-slate-700/90 text-slate-200 shadow-black/80' : 'bg-white border-slate-300 text-slate-900 shadow-slate-400/30'
-                      }`}
-                    >
-                      <div className="px-3 py-2 border-b border-slate-800/80">
-                        <p className="text-[10px] uppercase font-mono text-slate-500 font-bold">Signed In As</p>
-                        <p className="text-xs font-semibold truncate text-emerald-400" title={currentUser.email}>
-                          {currentUser.email}
-                        </p>
-                      </div>
-
-                      <button
-                        onClick={() => {
-                          setUserDropdownOpen(false);
-                          setSidebarOpen(true);
-                          setSidebarTab('history');
-                        }}
-                        className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors text-left ${
-                          theme === 'dark' ? 'hover:bg-slate-800 hover:text-emerald-300' : 'hover:bg-slate-100 hover:text-emerald-800'
-                        }`}
-                      >
-                        <History className="w-3.5 h-3.5 text-emerald-500" />
-                        <span>Query History ({chatHistory.length})</span>
-                      </button>
-
-                      <button
-                        onClick={handleSignOut}
-                        className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-rose-400 hover:text-rose-300 transition-colors text-left ${
-                          theme === 'dark' ? 'hover:bg-slate-800/80' : 'hover:bg-slate-100'
-                        }`}
-                      >
-                        <LogOut className="w-3.5 h-3.5" />
-                        <span>Sign Out</span>
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-            ) : (
+            {/* Sign In button for guest users (when logged in, profile & logout are docked at the sidebar bottom) */}
+            {!currentUser && (
               <button
                 onClick={() => setAuthModalOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs transition-all shadow-sm"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs transition-all shadow-sm cursor-pointer"
               >
                 <LogIn className="w-3.5 h-3.5" />
                 <span>Sign In</span>
@@ -1920,6 +2048,14 @@ export default function App() {
                             The retrieved policy chunks do not verify this specific query. To prevent hallucinations, PolicyPilot strictly answers from validated passages.
                           </p>
                         </div>
+                      </div>
+                    )}
+
+                    {/* Instant Semantic Cache Badge */}
+                    {msg.is_cached && (
+                      <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10.5px] font-mono font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 shadow-xs">
+                        <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Instant Semantic Cache &bull; 0 Tokens Spent</span>
                       </div>
                     )}
 
@@ -2158,23 +2294,25 @@ export default function App() {
                       <span className="font-mono">{msg.timestamp}</span>
                       <div className="flex items-center gap-2">
                         
-                        {/* Direct Export as PDF Button */}
-                        <button
-                          onClick={() => {
-                            const msgIdx = messages.findIndex(m => m.id === msg.id);
-                            const qText = msgIdx > 0 ? messages[msgIdx - 1]?.content : 'Policy Inquiry';
-                            exportToPdf(qText, msg.content, msg.citations, activeDocName);
-                          }}
-                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-semibold transition-all shadow-xs ${
-                            theme === 'dark'
-                              ? 'bg-slate-900 border-slate-750 text-slate-200 hover:text-emerald-400 hover:border-emerald-500/50'
-                              : 'bg-white border-slate-300 text-slate-800 hover:text-emerald-700 hover:border-emerald-500'
-                          }`}
-                          title="Export response as PDF"
-                        >
-                          <FileDown className="w-3.5 h-3.5 text-emerald-500" />
-                          <span>Export PDF</span>
-                        </button>
+                        {/* Direct Export as PDF Button - Only show if verified & grounded (hidden on refusals) */}
+                        {!msg.is_refusal && !msg.content?.includes('The retrieved policy chunks do not verify this specific query') && (
+                          <button
+                            onClick={() => {
+                              const msgIdx = messages.findIndex(m => m.id === msg.id);
+                              const qText = msgIdx > 0 ? messages[msgIdx - 1]?.content : 'Policy Inquiry';
+                              exportToPdf(qText, msg.content, msg.citations, activeDocName);
+                            }}
+                            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-semibold transition-all shadow-xs ${
+                              theme === 'dark'
+                                ? 'bg-slate-900 border-slate-750 text-slate-200 hover:text-emerald-400 hover:border-emerald-500/50'
+                                : 'bg-white border-slate-300 text-slate-800 hover:text-emerald-700 hover:border-emerald-500'
+                            }`}
+                            title="Export response as PDF"
+                          >
+                            <FileDown className="w-3.5 h-3.5 text-emerald-500" />
+                            <span>Export PDF</span>
+                          </button>
+                        )}
 
                         {/* Copy Answer Button */}
                         <button
@@ -2303,6 +2441,7 @@ export default function App() {
         isOpen={authModalOpen}
         onClose={() => setAuthModalOpen(false)}
         onAuthSuccess={handleAuthSuccess}
+        initialMode={authInitialMode}
         theme={theme}
       />
     </div>

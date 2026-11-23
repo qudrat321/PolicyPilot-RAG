@@ -2161,8 +2161,22 @@ export default function App() {
 
                   <div className="flex-1 overflow-hidden space-y-3">
                     
-                    {/* Refusal Notice Banner */}
-                    {msg.is_refusal && (
+                    {/* Service Alert or Grounding Refusal Notice Banner */}
+                    {msg.content?.toLowerCase().includes('high server demand') || msg.content?.toLowerCase().includes('error connecting to ai service') ? (
+                      <div className={`p-3 rounded-xl border text-xs flex items-start gap-2.5 ${
+                        theme === 'dark'
+                          ? 'bg-rose-950/30 border-rose-800/70 text-rose-200'
+                          : 'bg-rose-50 border-rose-300 text-rose-800'
+                      }`}>
+                        <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+                        <div>
+                          <p className={`font-semibold ${theme === 'dark' ? 'text-rose-300' : 'text-rose-900'}`}>AI Service Notice</p>
+                          <p className={`mt-0.5 ${theme === 'dark' ? 'text-rose-200/90' : 'text-rose-800/90'}`}>
+                            Google AI generation servers are temporarily experiencing high demand. Please try resubmitting in a moment.
+                          </p>
+                        </div>
+                      </div>
+                    ) : msg.is_refusal ? (
                       <div className={`p-3 rounded-xl border text-xs flex items-start gap-2.5 ${
                         theme === 'dark'
                           ? 'bg-amber-950/30 border-amber-800/70 text-amber-200'
@@ -2176,7 +2190,7 @@ export default function App() {
                           </p>
                         </div>
                       </div>
-                    )}
+                    ) : null}
 
                     {/* Instant Semantic Cache Badge */}
                     {msg.is_cached && (
@@ -2421,8 +2435,12 @@ export default function App() {
                       <span className="font-mono">{msg.timestamp}</span>
                       <div className="flex items-center gap-2">
                         
-                        {/* Direct Export as PDF Button - Only show if verified & grounded (hidden on refusals) */}
-                        {!msg.is_refusal && !msg.content?.includes('The retrieved policy chunks do not verify this specific query') && (
+                        {/* Direct Export as PDF Button - Only show if verified & grounded (hidden on refusals, errors & guardrails) */}
+                        {!msg.is_refusal &&
+                          !msg.content?.includes('The retrieved policy chunks do not verify this specific query') &&
+                          !msg.content?.toLowerCase().includes('error connecting to ai service') &&
+                          !msg.content?.toLowerCase().includes('high server demand') &&
+                          !msg.content?.toLowerCase().includes('grounding guardrail active') && (
                           <button
                             onClick={() => {
                               const msgIdx = messages.findIndex(m => m.id === msg.id);

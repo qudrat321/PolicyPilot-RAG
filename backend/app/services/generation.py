@@ -20,6 +20,14 @@ logger = logging.getLogger(__name__)
 GENERATION_MODEL = "gemini-3.1-flash-lite"
 FALLBACK_MODEL = "gemini-3.5-flash-lite"
 
+# Prioritized failover pool for high-availability production generation
+MODEL_CANDIDATES = [
+    "gemini-3.1-flash-lite",
+    "gemini-3.5-flash-lite",
+    "gemini-3.8-flash",
+    "gemini-3.5-flash",
+]
+
 SYSTEM_INSTRUCTION = """You are PolicyPilot, an enterprise public policy assistant.
 Answer the user's question accurately, professionally, and strictly using ONLY the provided document passages.
 
@@ -61,6 +69,57 @@ def get_genai_client() -> genai.Client:
             http_options=types.HttpOptions(timeout=20000),
         )
     return _genai_client
+
+
+def _generate_content_with_failover(
+    client: genai.Client,
+    contents: str,
+    config: types.GenerateContentConfig,
+    max_retries_per_model: int = 2,
+) -> str:
+    """
+    Robust generator that cycles through available Gemini flash models on 503 UNAVAILABLE,
+    429 RATE_LIMIT, or temporary server demand spikes with backoff.
+    """
+    last_error = None
+    for model_name in MODEL_CANDIDATES:
+        for attempt in range(1, max_retries_per_model + 1):
+            try:
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=contents,
+                    config=config,
+                )
+                if response and response.text:
+                    return response.text.strip()
+                return ""
+            except Exception as e:
+                err_str = str(e).lower()
+                is_transient = (
+                    "503" in err_str
+                    or "unavailable" in err_str
+                    or "demand" in err_str
+                    or "429" in err_str
+                    or "resource_exhausted" in err_str
+                    or "quota" in err_str
+                    or "overloaded" in err_str
+                    or "504" in err_str
+                    or "deadline" in err_str
+                    or "timeout" in err_str
+                )
+                last_error = e
+                logger.warning(
+                    f"Gemini generation on '{model_name}' attempt {attempt} failed: {e}. "
+                    f"Transient={is_transient}"
+                )
+                if is_transient:
+                    time.sleep(0.5 * attempt)
+                    continue
+                else:
+                    # Model deprecated / not found; immediately advance to next candidate
+                    break
+
+    raise last_error or RuntimeError("All generation models in the failover pool are temporarily unavailable.")
 
 
 def build_context_envelope(chunks: List[Dict[str, Any]]) -> str:
@@ -129,17 +188,16 @@ def formulate_search_query_in_english(user_query: str) -> str:
             "Output ONLY the English search keywords, nothing else.\n\n"
             f"User Query: {user_query}"
         )
-        response = client.models.generate_content(
-            model=GENERATION_MODEL,
+        translated = _generate_content_with_failover(
+            client=client,
             contents=prompt,
             config=types.GenerateContentConfig(
                 temperature=0.0,
                 max_output_tokens=30,
             ),
         )
-        if response.text and response.text.strip():
-            translated = response.text.strip().replace('"', '').replace("'", "")
-            return translated
+        if translated:
+            return translated.replace('"', '').replace("'", "")
     except Exception as e:
         logger.warning(f"Search query English translation fallback: {e}")
     return user_query
@@ -174,8 +232,8 @@ STRICT CONVERSION & GROUNDING RULES:
 4. Output ONLY the translated/reformatted grounded answer."""
 
     try:
-        response = client.models.generate_content(
-            model=GENERATION_MODEL,
+        raw_answer = _generate_content_with_failover(
+            client=client,
             contents=prompt,
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_INSTRUCTION,
@@ -183,21 +241,18 @@ STRICT CONVERSION & GROUNDING RULES:
                 max_output_tokens=1500,
             ),
         )
-    except Exception:
-        try:
-            response = client.models.generate_content(
-                model=FALLBACK_MODEL,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    system_instruction=SYSTEM_INSTRUCTION,
-                    temperature=0.1,
-                    max_output_tokens=1500,
-                ),
+    except Exception as e:
+        logger.error(f"Reformat failure after model failover: {e}")
+        err_msg = str(e)
+        if any(w in err_msg.lower() for w in ["503", "unavailable", "demand", "429", "resource_exhausted", "quota"]):
+            return (
+                "The AI generation service is temporarily experiencing high server demand. Please try again in a moment.",
+                [],
+                True,
             )
-        except Exception as e:
-            return f"Error: {str(e)}", [], True
+        return f"Error: {err_msg}", [], True
 
-    raw_answer = response.text.strip() if response.text else previous_answer
+    raw_answer = raw_answer if raw_answer else previous_answer
     clean_answer, citations = validate_and_clean_citations(raw_answer, previous_chunks)
     return clean_answer, citations, False
 
@@ -219,8 +274,8 @@ def generate_grounded_answer(
 
     client = get_genai_client()
     try:
-        response = client.models.generate_content(
-            model=GENERATION_MODEL,
+        raw_answer = _generate_content_with_failover(
+            client=client,
             contents=prompt,
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_INSTRUCTION,
@@ -228,22 +283,18 @@ def generate_grounded_answer(
                 max_output_tokens=1500,
             ),
         )
-    except Exception:
-        # Fallback to secondary flash model on transient provider spike
-        try:
-            response = client.models.generate_content(
-                model=FALLBACK_MODEL,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    system_instruction=SYSTEM_INSTRUCTION,
-                    temperature=0.1,
-                    max_output_tokens=1500,
-                ),
+    except Exception as e:
+        logger.error(f"Generation failure after model failover: {e}")
+        err_msg = str(e)
+        if any(w in err_msg.lower() for w in ["503", "unavailable", "demand", "429", "resource_exhausted", "quota"]):
+            return (
+                "The AI generation service is temporarily experiencing high server demand. Please try submitting your question again in a moment.",
+                [],
+                True,
             )
-        except Exception as e:
-            return f"Error connecting to AI service: {str(e)}", [], True
+        return f"Error connecting to AI service: {err_msg}", [], True
 
-    raw_answer = response.text.strip() if response.text else refusal_text
+    raw_answer = raw_answer if raw_answer else refusal_text
 
     # Gate 3: Post-LLM Citation Cross-Validation
     clean_answer, citations = validate_and_clean_citations(raw_answer, chunks)

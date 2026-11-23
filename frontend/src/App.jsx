@@ -1083,6 +1083,35 @@ export default function App() {
       setAuthModalOpen(true);
       return;
     }
+
+    // Professional Query Deduplication & History Cache Check
+    const normalizeQuery = (q) => (q || '').trim().toLowerCase().replace(/[?.,!]+$/, '').trim();
+    const normalizedInput = normalizeQuery(query);
+
+    const cachedTurn = chatHistory.find(
+      item => normalizeQuery(item.question) === normalizedInput && !item.is_refusal && item.answer
+    );
+
+    if (cachedTurn) {
+      // Instant cache hit: Return verified answer in < 5ms without burning LLM tokens
+      const cachedAssistantMsg = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: cachedTurn.answer,
+        is_refusal: false,
+        citations: cachedTurn.citations || [],
+        retrieved_chunks: cachedTurn.retrieved_chunks || [],
+        is_cached: true,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      };
+
+      setMessages([...baseMessages, cachedAssistantMsg]);
+      const targetUserId = currentUser?.id || 'guest';
+      saveChatTurnToDatabase(targetUserId, query, cachedTurn.answer, cachedTurn.citations, false);
+      loadHistory(targetUserId);
+      return;
+    }
+
     setLoading(true);
     try {
       const payload = {
@@ -1642,6 +1671,83 @@ export default function App() {
             <span className={`text-[10px] font-mono font-bold ${theme === 'dark' ? 'text-blue-500' : 'text-blue-700'}`}>SHA-256</span>
           </div>
         </div>
+
+        {/* User Profile Card at Sidebar Bottom */}
+        {currentUser && (
+          <div className={`p-3 border-t relative shrink-0 ${theme === 'dark' ? 'border-slate-800/80 bg-slate-950/80' : 'border-slate-200 bg-slate-50'}`}>
+            <div className="relative">
+              <button
+                onClick={() => setUserDropdownOpen(!userDropdownOpen)}
+                className={`w-full flex items-center justify-between p-2 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
+                  theme === 'dark'
+                    ? 'bg-slate-900 border-slate-750 text-slate-200 hover:border-emerald-500/50 hover:bg-slate-850'
+                    : 'bg-white border-slate-300 text-slate-800 hover:border-emerald-600 hover:bg-slate-100 shadow-xs'
+                }`}
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-7 h-7 rounded-lg bg-emerald-500 text-slate-950 font-bold flex items-center justify-center text-xs shrink-0 shadow-xs">
+                    {(currentUser.user_metadata?.full_name || currentUser.email || 'U')[0].toUpperCase()}
+                  </div>
+                  <div className="truncate text-left leading-tight">
+                    <div className="truncate font-bold text-xs">
+                      {currentUser.user_metadata?.full_name || currentUser.email?.split('@')[0]}
+                    </div>
+                    <div className={`truncate text-[10px] font-mono ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
+                      {currentUser.email}
+                    </div>
+                  </div>
+                </div>
+                <ChevronDown className={`w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform ${userDropdownOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {/* Profile Dropdown Menu (Opens upwards above the profile card) */}
+              {userDropdownOpen && (
+                <>
+                  <div className="fixed inset-0 z-30" onClick={() => setUserDropdownOpen(false)} />
+                  <div
+                    className={`absolute left-0 bottom-full mb-2 w-full rounded-xl border p-1.5 shadow-2xl z-40 animate-fade-in ${
+                      theme === 'dark' ? 'bg-[#0f172a] border-slate-700/90 text-slate-200 shadow-black/80' : 'bg-white border-slate-300 text-slate-900 shadow-slate-400/30'
+                    }`}
+                  >
+                    <div className={`px-3 py-2 border-b text-xs mb-1 ${theme === 'dark' ? 'border-slate-800' : 'border-slate-200'}`}>
+                      <p className="font-bold truncate">{currentUser.user_metadata?.full_name || 'Enterprise User'}</p>
+                      <p className="text-[10px] font-mono truncate text-emerald-400">{currentUser.email}</p>
+                      {currentUser.user_metadata?.contact_number && (
+                        <p className={`text-[10px] font-mono truncate mt-0.5 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
+                          📞 {currentUser.user_metadata.contact_number}
+                        </p>
+                      )}
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        setUserDropdownOpen(false);
+                        setSidebarTab('history');
+                      }}
+                      className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors text-left cursor-pointer ${
+                        theme === 'dark' ? 'hover:bg-slate-800 hover:text-emerald-300' : 'hover:bg-slate-100 hover:text-emerald-800'
+                      }`}
+                    >
+                      <History className="w-3.5 h-3.5 text-emerald-500" />
+                      <span>Query History ({chatHistory.length})</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setUserDropdownOpen(false);
+                        handleSignOut();
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 transition-colors text-left cursor-pointer"
+                    >
+                      <LogOut className="w-3.5 h-3.5" />
+                      <span>Sign Out</span>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
       </aside>
 
       {/* ================= MAIN CHAT AREA (CLAUDE CODE STYLE) ================= */}
@@ -1730,72 +1836,24 @@ export default function App() {
               </button>
             )}
 
-            {/* User Profile / Login Button */}
+            {/* Quick Sign Out Action (Profile is docked at sidebar bottom) */}
             {currentUser ? (
-              <div className="relative">
-                <button
-                  onClick={() => setUserDropdownOpen(!userDropdownOpen)}
-                  className={`flex items-center gap-2 pl-2 pr-3 py-1 rounded-xl border text-xs font-semibold transition-all ${
-                    theme === 'dark'
-                      ? 'bg-slate-900 border-slate-750 text-slate-200 hover:border-emerald-500/50'
-                      : 'bg-white border-slate-300 text-slate-800 hover:border-emerald-600 shadow-xs'
-                  }`}
-                >
-                  <div className="w-6 h-6 rounded-lg bg-emerald-500 text-slate-950 font-bold flex items-center justify-center text-[11px] shrink-0">
-                    {(currentUser.user_metadata?.full_name || currentUser.email || 'U')[0].toUpperCase()}
-                  </div>
-                  <span className="max-w-[120px] truncate hidden sm:inline">
-                    {currentUser.user_metadata?.full_name || currentUser.email?.split('@')[0]}
-                  </span>
-                  <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${userDropdownOpen ? 'rotate-180' : ''}`} />
-                </button>
-
-                {userDropdownOpen && (
-                  <>
-                    <div className="fixed inset-0 z-30" onClick={() => setUserDropdownOpen(false)} />
-                    <div
-                      className={`absolute right-0 top-full mt-1.5 w-56 rounded-xl border p-1.5 shadow-2xl z-40 animate-fade-in ${
-                        theme === 'dark' ? 'bg-[#0f172a] border-slate-700/90 text-slate-200 shadow-black/80' : 'bg-white border-slate-300 text-slate-900 shadow-slate-400/30'
-                      }`}
-                    >
-                      <div className="px-3 py-2 border-b border-slate-800/80">
-                        <p className="text-[10px] uppercase font-mono text-slate-500 font-bold">Signed In As</p>
-                        <p className="text-xs font-semibold truncate text-emerald-400" title={currentUser.email}>
-                          {currentUser.email}
-                        </p>
-                      </div>
-
-                      <button
-                        onClick={() => {
-                          setUserDropdownOpen(false);
-                          setSidebarOpen(true);
-                          setSidebarTab('history');
-                        }}
-                        className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors text-left ${
-                          theme === 'dark' ? 'hover:bg-slate-800 hover:text-emerald-300' : 'hover:bg-slate-100 hover:text-emerald-800'
-                        }`}
-                      >
-                        <History className="w-3.5 h-3.5 text-emerald-500" />
-                        <span>Query History ({chatHistory.length})</span>
-                      </button>
-
-                      <button
-                        onClick={handleSignOut}
-                        className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-rose-400 hover:text-rose-300 transition-colors text-left ${
-                          theme === 'dark' ? 'hover:bg-slate-800/80' : 'hover:bg-slate-100'
-                        }`}
-                      >
-                        <LogOut className="w-3.5 h-3.5" />
-                        <span>Sign Out</span>
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
+              <button
+                onClick={handleSignOut}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
+                  theme === 'dark'
+                    ? 'bg-slate-900 border-slate-800 text-slate-400 hover:text-rose-400 hover:border-rose-500/40 hover:bg-rose-950/20'
+                    : 'bg-white border-slate-300 text-slate-700 hover:text-rose-600 hover:border-rose-400 hover:bg-rose-50 shadow-xs'
+                }`}
+                title="Sign Out of PolicyPilot"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Sign Out</span>
+              </button>
             ) : (
               <button
                 onClick={() => setAuthModalOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs transition-all shadow-sm"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs transition-all shadow-sm cursor-pointer"
               >
                 <LogIn className="w-3.5 h-3.5" />
                 <span>Sign In</span>
@@ -1978,6 +2036,14 @@ export default function App() {
                             The retrieved policy chunks do not verify this specific query. To prevent hallucinations, PolicyPilot strictly answers from validated passages.
                           </p>
                         </div>
+                      </div>
+                    )}
+
+                    {/* Instant Semantic Cache Badge */}
+                    {msg.is_cached && (
+                      <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10.5px] font-mono font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 shadow-xs">
+                        <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Instant Semantic Cache &bull; 0 Tokens Spent</span>
                       </div>
                     )}
 

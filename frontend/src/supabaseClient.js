@@ -185,14 +185,22 @@ export async function fetchUserChatHistory(userId) {
 }
 
 /**
- * Save an inquiry turn to database under the user's account.
+ * Save an inquiry turn to database under the user's account with deduplication.
  */
-export async function saveChatTurnToDatabase(userId, question, answer, citations = [], isRefusal = false) {
+export async function saveChatTurnToDatabase(
+  userId,
+  question,
+  answer,
+  citations = [],
+  isRefusal = false,
+  sessionId = 'default'
+) {
   if (!userId || !question || !answer) return;
 
   const entry = {
     user_id: userId,
-    question,
+    session_id: sessionId || 'default',
+    question: question.trim(),
     answer,
     citations: citations || [],
     is_refusal: Boolean(isRefusal),
@@ -201,12 +209,38 @@ export async function saveChatTurnToDatabase(userId, question, answer, citations
 
   if (!isSupabaseConfigured()) {
     const existing = JSON.parse(localStorage.getItem(`policypilot_history_${userId}`) || '[]');
-    existing.unshift({ id: Date.now().toString(), ...entry });
-    localStorage.setItem(`policypilot_history_${userId}`, JSON.stringify(existing.slice(0, 50)));
+    const normQ = question.trim().toLowerCase();
+    const filtered = existing.filter(item => item.question?.trim().toLowerCase() !== normQ);
+    filtered.unshift({ id: Date.now().toString(), ...entry });
+    localStorage.setItem(`policypilot_history_${userId}`, JSON.stringify(filtered.slice(0, 50)));
     return;
   }
 
   try {
+    // Professional Deduplication: check if this user already asked this exact question
+    const { data: existingRows } = await supabase
+      .from('chat_history')
+      .select('id, question')
+      .eq('user_id', userId)
+      .eq('question', question.trim())
+      .limit(1);
+
+    if (existingRows && existingRows.length > 0) {
+      // Update existing record: touch created_at to bring it to top, update answer & citations without wasting space
+      await supabase
+        .from('chat_history')
+        .update({
+          session_id: sessionId || 'default',
+          answer,
+          citations: citations || [],
+          is_refusal: Boolean(isRefusal),
+          created_at: new Date().toISOString(),
+        })
+        .eq('id', existingRows[0].id);
+      return;
+    }
+
+    // Insert new entry with session_id
     const { error } = await supabase.from('chat_history').insert([entry]);
     if (error) {
       console.warn('Could not save chat turn to Supabase:', error.message);

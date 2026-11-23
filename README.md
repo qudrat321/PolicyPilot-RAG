@@ -5,7 +5,26 @@
 > Engineered for 100% strict grounding, zero hallucinations, and sub-second retrieval over complex documents and multi-sheet spreadsheets.
 
 ---
+## 🌐 Live Production & Maximum Availability
 
+| Service | Access Link | Description |
+|---|---|---|
+| **Live Web App & API** | [https://policypilot-api-qrgd.onrender.com/](https://policypilot-api-qrgd.onrender.com/) | Live PolicyPilot RAG Assistant UI and Swagger REST documentation |
+| **Health & Keep-Alive Endpoint** | [https://policypilot-api-qrgd.onrender.com/health](https://policypilot-api-qrgd.onrender.com/health) | Real-time service status, environment, and Qdrant Cloud connectivity probe |
+| **Availability Monitor** | [UptimeRobot Monitor](https://policypilot-api-qrgd.onrender.com/health) | Automated keep-alive pinger configured for 100% service uptime |
+
+---
+
+### ⚡ 24/7 Maximum Availability with UptimeRobot
+
+Render's standard free-tier web instances automatically spin down into a sleep state after **15 minutes of inactivity**, which would otherwise cause a **50+ second cold-start delay** for first-time visitors.
+
+To guarantee maximum availability and instant sub-second responses:
+1. **Continuous 14-Minute Heartbeat**: UptimeRobot is configured with an automated HTTP/S monitor pinging the [`/health`](https://policypilot-api-qrgd.onrender.com/health) endpoint every **14 minutes**.
+2. **Zero Cold Starts**: The continuous health probe keeps the lightweight FastAPI backend continuously warm in memory ($<120\text{ MB}$ RAM) without incurring any compute charges.
+3. **Automated Incident Logging**: Provides continuous uptime verification, SSL certificate tracking, and instant alerts if any cloud resource becomes unreachable.
+
+---
 ## 🌟 Key Highlights
 
 - **💸 100% Zero-Cost Cloud Architecture**: Runs completely on generous free tiers (Vercel, Render, Qdrant Cloud Free, Google AI Studio) with **$0 cloud bill**.
